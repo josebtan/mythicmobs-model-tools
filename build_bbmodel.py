@@ -229,16 +229,24 @@ demo_mob = [
 # ---------------------------------------------------------------------------
 # Model 2: golem_boss - tanque musculoso, brazos largos y articulados, gorila
 # ---------------------------------------------------------------------------
+HUNCH_DEG = 22  # forward lean of the torso (and, rigidly, head) around the hips
+
 def arm_chain(side):
     """side = 1 (left, +x) or -1 (right, -x). Builds shoulder -> upper_arm -> forearm -> fist.
     Total span (top of shoulder to bottom of fist) = 29 units, kept under the body's
     total height (32 units) so the arms read as long/ape-like without exceeding the torso+legs+head.
+
+    The shoulder counter-rotates by -HUNCH_DEG: since it's nested under the torso (which leans
+    forward by HUNCH_DEG), without this the whole arm would inherit that tilt rigidly and swing
+    backward instead of hanging down. Canceling it here keeps the arm hanging straight down (as
+    originally designed) from the new, forward-shifted shoulder attachment point.
     """
     s = side
     tag = "left" if s > 0 else "right"
     return {
         "name": f"{tag}_shoulder",
         "origin": [s * 10.5, 25, 0],
+        "rotation": [-HUNCH_DEG, 0, 0],
         "cubes": [{"from": [s * 7, 22, -5], "to": [s * 14, 28, 5]}],  # wide gorilla shoulder pad
         "children": [{
             "name": f"{tag}_upper_arm",
@@ -269,7 +277,7 @@ golem_boss = [
     {
         "name": "torso",
         "origin": [0, 10, 0],
-        "rotation": [22, 0, 0],  # forward hunch, pivoting at the hips/waist (this part's origin)
+        "rotation": [HUNCH_DEG, 0, 0],  # forward hunch, pivoting at the hips/waist (this part's origin)
         "cubes": [
             # Torso built as stacked segments of varying width for a gorilla hourglass-ish
             # silhouette: broad chest/shoulders -> tapered waist -> hips flare back out.
