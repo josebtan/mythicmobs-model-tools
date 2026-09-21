@@ -113,7 +113,10 @@ function buildModel(cubes) {
 }
 
 function loadModel(path) {
-  fetch(path)
+  // Cache-bust: avoid the browser serving a stale cached copy of the JSON
+  // after we push updates to the model data.
+  const url = path + (path.includes('?') ? '&' : '?') + 'v=' + Date.now();
+  fetch(url)
     .then(r => r.json())
     .then(buildModel)
     .catch(err => {
