@@ -123,26 +123,26 @@ def arm_chain(side):
     tag = "left" if s > 0 else "right"
     return {
         "name": f"{tag}_shoulder",
-        "origin": [s * 9, 25, 0],
-        "cubes": [{"from": [s * 6, 22, -5], "to": [s * 12, 28, 5]}],
+        "origin": [s * 10.5, 25, 0],
+        "cubes": [{"from": [s * 7, 22, -5], "to": [s * 14, 28, 5]}],  # wide gorilla shoulder pad
         "children": [{
             "name": f"{tag}_upper_arm",
-            "origin": [s * 9, 22, 0],
+            "origin": [s * 10.5, 22, 0],
             "cubes": [
-                {"from": [s * 7, 12, -3], "to": [s * 11, 22, 3]},   # bicep block
-                {"from": [s * 6.5, 12, -3.2], "to": [s * 11.5, 14.5, 3.2]},  # bicep bulge near elbow
+                {"from": [s * 8, 12, -3.5], "to": [s * 13, 22, 3.5]},        # bicep block
+                {"from": [s * 7.5, 12, -3.7], "to": [s * 13.5, 14.5, 3.7]},  # bicep bulge near elbow
             ],
             "children": [{
                 "name": f"{tag}_forearm",
-                "origin": [s * 9, 12, 0],
+                "origin": [s * 10.5, 12, 0],
                 "cubes": [
-                    {"from": [s * 6, 4, -3], "to": [s * 11, 12, 3]},          # forearm
-                    {"from": [s * 5.5, 9.5, -3.5], "to": [s * 11.5, 12, 3.5]},  # armored bracer/cuff
+                    {"from": [s * 7, 4, -3.5], "to": [s * 13, 12, 3.5]},         # forearm (thick, gorilla-like)
+                    {"from": [s * 6.5, 9.5, -4], "to": [s * 13.5, 12, 4]},       # armored bracer/cuff
                 ],
                 "children": [{
                     "name": f"{tag}_fist",
-                    "origin": [s * 8.5, 1.5, 0],
-                    "cubes": [{"from": [s * 5, -1, -5], "to": [s * 12, 4, 5]}],  # big fist
+                    "origin": [s * 10, 1.5, 0],
+                    "cubes": [{"from": [s * 6, -1, -5.5], "to": [s * 14, 4, 5.5]}],  # big knuckle-dragging fist
                     "children": [],
                 }],
             }],
@@ -155,20 +155,28 @@ golem_boss = [
         "name": "torso",
         "origin": [0, 10, 0],
         "cubes": [
-            {"from": [-6, 10, -4], "to": [6, 26, 4]},          # main torso block, wide & thick
-            {"from": [0.5, 20, 4], "to": [5, 26, 6]},          # left pectoral
-            {"from": [-5, 20, 4], "to": [-0.5, 26, 6]},        # right pectoral
-            {"from": [-4, 14, 4], "to": [4, 20, 5.5]},         # abdomen / ab muscles block
-            {"from": [-6.5, 8, -4.5], "to": [6.5, 10, 4.5]},   # waist / oblique band (slight overhang)
-            {"from": [-2, 25, -2], "to": [2, 28.5, 2]},        # trapezius / thick neck
+            # Torso built as stacked segments of varying width for a gorilla hourglass-ish
+            # silhouette: broad chest/shoulders -> tapered waist -> hips flare back out.
+            {"from": [-7, 22, -4], "to": [7, 26, 4]},            # chest (broadest point)
+            {"from": [1, 22, 4], "to": [6.5, 26, 6.5]},          # left pectoral
+            {"from": [-6.5, 22, 4], "to": [-1, 26, 6.5]},        # right pectoral
+            {"from": [-5.5, 18, -3.5], "to": [5.5, 22, 3.5]},    # ribs / upper abs (tapering in)
+            {"from": [-4, 18, 3.5], "to": [4, 21, 5]},           # abdomen muscle detail
+            {"from": [-4, 14, -3], "to": [4, 18, 3]},            # waist (narrowest point)
+            {"from": [-5, 10, -3.5], "to": [5, 14, 3.5]},        # hips (wider than waist, flare for pelvis)
+            {"from": [-2.5, 25.5, -2], "to": [2.5, 29, 2]},      # trapezius / thick neck
         ],
     },
     {
         "name": "head",
-        "origin": [0, 26, 0],
+        "origin": [0, 27.5, 0],
         "cubes": [
-            {"from": [-3, 26, -3], "to": [3, 32, 3]},          # small head = tank silhouette
-            {"from": [-3, 30, -3.5], "to": [3, 31, -3]},       # brow ridge
+            {"from": [-3, 29, -3], "to": [3, 32.5, 2.5]},        # cranium (upper/back skull)
+            {"from": [-2.8, 26, -2.8], "to": [2.8, 29, 2.8]},    # lower head / jaw block
+            {"from": [-2, 26.3, 2.5], "to": [2, 28, 5.2]},       # protruding muzzle/snout
+            {"from": [-3, 29.8, 2.3], "to": [3, 30.6, 3.3]},     # brow ridge (front, above muzzle)
+            {"from": [3, 28, -1], "to": [4, 30, 1]},             # left ear
+            {"from": [-4, 28, -1], "to": [-3, 30, 1]},           # right ear
         ],
     },
     arm_chain(1),   # left arm chain (shoulder/upper/forearm/fist)
