@@ -115,7 +115,10 @@ demo_mob = [
 # Model 2: golem_boss - tanque musculoso, brazos largos y articulados
 # ---------------------------------------------------------------------------
 def arm_chain(side):
-    """side = 1 (left, +x) or -1 (right, -x). Builds shoulder -> upper_arm -> forearm -> fist."""
+    """side = 1 (left, +x) or -1 (right, -x). Builds shoulder -> upper_arm -> forearm -> fist.
+    Total span (top of shoulder to bottom of fist) = 28 units, kept under the body's
+    total height (32 units) so the arms read as long/ape-like without exceeding the torso+legs+head.
+    """
     s = side
     tag = "left" if s > 0 else "right"
     return {
@@ -125,15 +128,21 @@ def arm_chain(side):
         "children": [{
             "name": f"{tag}_upper_arm",
             "origin": [s * 9, 22, 0],
-            "cubes": [{"from": [s * 7, 10, -3], "to": [s * 11, 22, 3]}],
+            "cubes": [
+                {"from": [s * 7, 12, -3], "to": [s * 11, 22, 3]},   # bicep block
+                {"from": [s * 6.5, 12, -3.2], "to": [s * 11.5, 14.5, 3.2]},  # bicep bulge near elbow
+            ],
             "children": [{
                 "name": f"{tag}_forearm",
-                "origin": [s * 9, 10, 0],
-                "cubes": [{"from": [s * 6, -2, -3], "to": [s * 11, 10, 3]}],
+                "origin": [s * 9, 12, 0],
+                "cubes": [
+                    {"from": [s * 6, 4, -3], "to": [s * 11, 12, 3]},          # forearm
+                    {"from": [s * 5.5, 9.5, -3.5], "to": [s * 11.5, 12, 3.5]},  # armored bracer/cuff
+                ],
                 "children": [{
                     "name": f"{tag}_fist",
-                    "origin": [s * 8.5, -2, 0],
-                    "cubes": [{"from": [s * 5, -8, -5], "to": [s * 12, -2, 5]}],
+                    "origin": [s * 8.5, 1.5, 0],
+                    "cubes": [{"from": [s * 5, -1, -5], "to": [s * 12, 4, 5]}],  # big fist
                     "children": [],
                 }],
             }],
@@ -146,26 +155,39 @@ golem_boss = [
         "name": "torso",
         "origin": [0, 10, 0],
         "cubes": [
-            {"from": [-6, 10, -4], "to": [6, 26, 4]},   # main torso block, wide & thick
-            {"from": [-5, 20, 4], "to": [5, 26, 6]},    # chest muscle plate (protrudes forward)
+            {"from": [-6, 10, -4], "to": [6, 26, 4]},          # main torso block, wide & thick
+            {"from": [0.5, 20, 4], "to": [5, 26, 6]},          # left pectoral
+            {"from": [-5, 20, 4], "to": [-0.5, 26, 6]},        # right pectoral
+            {"from": [-4, 14, 4], "to": [4, 20, 5.5]},         # abdomen / ab muscles block
+            {"from": [-6.5, 8, -4.5], "to": [6.5, 10, 4.5]},   # waist / oblique band (slight overhang)
+            {"from": [-2, 25, -2], "to": [2, 28.5, 2]},        # trapezius / thick neck
         ],
     },
     {
         "name": "head",
         "origin": [0, 26, 0],
-        "cubes": [{"from": [-3, 26, -3], "to": [3, 32, 3]}],  # small head = tank silhouette
+        "cubes": [
+            {"from": [-3, 26, -3], "to": [3, 32, 3]},          # small head = tank silhouette
+            {"from": [-3, 30, -3.5], "to": [3, 31, -3]},       # brow ridge
+        ],
     },
     arm_chain(1),   # left arm chain (shoulder/upper/forearm/fist)
     arm_chain(-1),  # right arm chain
     {
         "name": "left_leg",
         "origin": [3.5, 5, 0],
-        "cubes": [{"from": [1, 0, -4], "to": [6, 10, 4]}],
+        "cubes": [
+            {"from": [1, 0, -4], "to": [6, 10, 4]},            # main leg
+            {"from": [0.5, 5, 4], "to": [6.5, 8, 5.5]},        # knee guard
+        ],
     },
     {
         "name": "right_leg",
         "origin": [-3.5, 5, 0],
-        "cubes": [{"from": [-6, 0, -4], "to": [-1, 10, 4]}],
+        "cubes": [
+            {"from": [-6, 0, -4], "to": [-1, 10, 4]},          # main leg
+            {"from": [-6.5, 5, 4], "to": [-0.5, 8, 5.5]},      # knee guard
+        ],
     },
 ]
 
