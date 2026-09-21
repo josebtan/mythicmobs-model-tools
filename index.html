@@ -70,8 +70,8 @@ scene.add(grid);
 const axes = new THREE.AxesHelper(4);
 scene.add(axes);
 
-const palette = [0x1f77b4, 0xff7f0e, 0x2ca02c, 0xd62728, 0x9467bd, 0x8c564b, 0xe377c2, 0x7f7f7f];
-
+// New JSON format: { texture: "x.png", texture_size: [W,H], cubes: [{name, from, to, origin, uv_faces}] }
+// uv_faces per cube: { east/west/north/south/up/down: [x1,y1,x2,y2] } in texture pixel coords.
 let currentGroup = null;
 
 function clearModel() {
@@ -79,30 +79,70 @@ function clearModel() {
     scene.remove(currentGroup);
     currentGroup.traverse(o => {
       if (o.geometry) o.geometry.dispose();
+      if (o.material && o.material.map) o.material.map.dispose();
       if (o.material) o.material.dispose();
     });
   }
 }
 
-// cubes.json entries look like: { name, from: [x,y,z], to: [x,y,z], origin: [x,y,z] }
-function buildModel(cubes) {
+const textureLoader = new THREE.TextureLoader();
+
+// BoxGeometry (r128) group order is [px, nx, py, ny, pz, nz].
+// Our own face-naming convention: east=+x, west=-x, up=+y, down=-y, south=+z (front), north=-z (back).
+const FACE_ORDER = ['east', 'west', 'up', 'down', 'south', 'north'];
+
+function applyBoxUV(geometry, uvFaces, texW, texH) {
+  const uvAttr = geometry.attributes.uv;
+  for (let f = 0; f < 6; f++) {
+    const rect = uvFaces[FACE_ORDER[f]];
+    if (!rect) continue;
+    const [x1, y1, x2, y2] = rect;
+    const u1 = x1 / texW, u2 = x2 / texW;
+    // Flip V: image Y grows downward, UV V grows upward.
+    const v1 = 1 - y2 / texH, v2 = 1 - y1 / texH;
+    const base = f * 4;
+    uvAttr.setXY(base + 0, u1, v1);
+    uvAttr.setXY(base + 1, u2, v1);
+    uvAttr.setXY(base + 2, u1, v2);
+    uvAttr.setXY(base + 3, u2, v2);
+  }
+  uvAttr.needsUpdate = true;
+}
+
+function buildModel(data) {
   clearModel();
   const group = new THREE.Group();
 
-  cubes.forEach((c, i) => {
+  const isTextured = data && !Array.isArray(data) && data.cubes;
+  const cubes = isTextured ? data.cubes : data;
+  const [texW, texH] = isTextured ? data.texture_size : [0, 0];
+
+  let material;
+  if (isTextured && data.texture) {
+    const tex = textureLoader.load(data.texture + '?v=' + Date.now());
+    tex.magFilter = THREE.NearestFilter;
+    tex.minFilter = THREE.NearestFilter;
+    tex.generateMipmaps = false;
+    material = new THREE.MeshLambertMaterial({ map: tex });
+  } else {
+    material = new THREE.MeshLambertMaterial({ color: 0x8a7a68 });
+  }
+
+  cubes.forEach((c) => {
     const [x0, y0, z0] = c.from;
     const [x1, y1, z1] = c.to;
     const sx = Math.abs(x1 - x0), sy = Math.abs(y1 - y0), sz = Math.abs(z1 - z0);
     const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, cz = (z0 + z1) / 2;
 
     const geom = new THREE.BoxGeometry(sx, sy, sz);
-    const mat = new THREE.MeshLambertMaterial({ color: palette[i % palette.length] });
-    const mesh = new THREE.Mesh(geom, mat);
+    if (isTextured && c.uv_faces) applyBoxUV(geom, c.uv_faces, texW, texH);
+
+    const mesh = new THREE.Mesh(geom, material);
     mesh.position.set(cx, cy, cz);
-    mesh.name = c.name || `cube_${i}`;
+    mesh.name = c.name || 'cube';
 
     const edges = new THREE.EdgesGeometry(geom);
-    const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x000000, opacity: 0.4, transparent: true }));
+    const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x000000, opacity: 0.25, transparent: true }));
     mesh.add(line);
 
     group.add(mesh);

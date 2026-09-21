@@ -8,7 +8,8 @@ cubes_file = sys.argv[1] if len(sys.argv) > 1 else "demo_mob_cubes.json"
 prefix = cubes_file.replace("_cubes.json", "")
 
 with open(cubes_file) as f:
-    cubes = json.load(f)
+    data = json.load(f)
+cubes = data["cubes"] if isinstance(data, dict) else data
 
 def cube_faces(f, t):
     # Minecraft coords are (x, y_up, z). matplotlib's default vertical axis

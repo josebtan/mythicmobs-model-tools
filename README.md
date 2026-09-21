@@ -9,12 +9,17 @@ renderizada para validar proporciones antes de abrirlos en Blockbench.
 - `build_bbmodel.py` — genera archivos `.bbmodel` (JSON válido de Blockbench) a partir de una
   definición jerárquica de **partes/huesos** (`name`, `origin`, `cubes`, `children`). Los `children`
   permiten armar cadenas articuladas reales (ej. hombro → antebrazo → puño), cada una como bone
-  independiente y rotable en Blockbench/ModelEngine — no solo cubos sueltos.
+  independiente y rotable en Blockbench/ModelEngine — no solo cubos sueltos. También genera y
+  empaqueta la **textura** de cada modelo (ver `texture_gen.py`).
+- `texture_gen.py` — empaqueta cada cubo en un atlas de textura usando el mismo esquema de **box UV**
+  que Minecraft (unwrap en cruz de las 6 caras), y lo pinta con Pillow: color base por cubo, sombreado
+  simple por cara (más clara arriba, más oscura abajo, como un AO falso) y ruido para textura de piel/roca.
 - `render_preview.py` — toma el `*_cubes.json` de un modelo y lo renderiza con matplotlib en 3
-  ángulos (isométrico, frente, lateral) para chequear visualmente el modelo sin abrir Blockbench.
+  ángulos (isométrico, frente, lateral) para chequear proporciones sin abrir Blockbench (colores
+  planos, no usa la textura real).
   Uso: `python3 render_preview.py <nombre>_cubes.json`
 - `index.html` — visor 3D interactivo (Three.js) publicado vía GitHub Pages, con selector de
-  modelo y botón de descarga del `.bbmodel`.
+  modelo, textura real aplicada por UV, y botón de descarga del `.bbmodel`.
 
 ### Modelos incluidos
 
@@ -54,5 +59,7 @@ proporciones y la ubicación de las piezas sin trabajar completamente a ciegas.
 ## Roadmap / ideas pendientes
 
 - Soporte para animaciones (keyframes) en `build_bbmodel.py`.
-- Texturizado / UV mapping más allá de color plano por cara.
+- Texturas más elaboradas: patrones (rayas, manchas, pelaje), no solo color plano + ruido.
+- Revisar orientación exacta del UV por cara en el visor (`applyBoxUV` en `index.html`) — puede haber
+  alguna cara reflejada/rotada respecto al eje esperado; se corrige a ojo comparando contra Blockbench.
 - Exportar directamente la config `.yml` de MythicMobs + ModelEngine junto al modelo.
