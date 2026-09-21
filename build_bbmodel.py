@@ -19,10 +19,21 @@ import json
 import uuid
 from io import BytesIO
 
+import numpy as np
+
 from texture_gen import paint_atlas
 
 def uid():
     return str(uuid.uuid4())
+
+
+def euler_matrix(deg):
+    """Rotation matrix for [rx,ry,rz] in degrees (Blockbench-style, applied Z*Y*X)."""
+    rx, ry, rz = np.radians(deg)
+    Rx = np.array([[1, 0, 0], [0, np.cos(rx), -np.sin(rx)], [0, np.sin(rx), np.cos(rx)]])
+    Ry = np.array([[np.cos(ry), 0, np.sin(ry)], [0, 1, 0], [-np.sin(ry), 0, np.cos(ry)]])
+    Rz = np.array([[np.cos(rz), -np.sin(rz), 0], [np.sin(rz), np.cos(rz), 0], [0, 0, 1]])
+    return Rz @ Ry @ Rx
 
 
 DEFAULT_COLOR = "#8A7A68"
@@ -40,14 +51,26 @@ PART_COLORS = {
 
 
 def build_bbmodel(model_name, root_parts, out_file):
-    # --- Pass 1: walk the tree, collect leaf cubes (geometry + color + owning part) ---
-    leaf_cubes = []  # each: {part_name, origin, from, to, w,h,d, color}
+    # --- Pass 1: walk the tree, collect leaf cubes (geometry + color + owning part)      ---
+    # Also compute each cube's WORLD center + WORLD rotation matrix by composing bone-level
+    # `rotation` (degrees, pivoting around that bone's own `origin`) down the hierarchy.
+    # This lets a static pose (e.g. a forward hunch on the torso) be authored once, at the
+    # bone level -- the same mechanism an animation would use -- and have every cube under
+    # it (including nested children like the head/arms) follow it automatically.
+    leaf_cubes = []  # each: {part_name, origin, from, to, w,h,d, color, world_center, world_R}
 
-    def walk(part):
+    def walk(part, parent_origin_rest=np.zeros(3), parent_world_origin=np.zeros(3), parent_world_R=np.eye(3)):
+        own_origin_rest = np.array(part["origin"], dtype=float)
+        own_local_R = euler_matrix(part.get("rotation", [0, 0, 0]))
+        world_R = parent_world_R @ own_local_R
+        world_origin = parent_world_origin + parent_world_R @ (own_origin_rest - parent_origin_rest)
+
         for cube in part.get("cubes", []):
             fx, fy, fz = cube["from"]
             tx, ty, tz = cube["to"]
             color = cube.get("color") or PART_COLORS.get(part["name"], DEFAULT_COLOR)
+            local_center = np.array([(fx + tx) / 2, (fy + ty) / 2, (fz + tz) / 2])
+            world_center = world_origin + world_R @ (local_center - own_origin_rest)
             leaf_cubes.append({
                 "part_name": part["name"],
                 "origin": part["origin"],
@@ -55,9 +78,11 @@ def build_bbmodel(model_name, root_parts, out_file):
                 "to": cube["to"],
                 "w": abs(tx - fx), "h": abs(ty - fy), "d": abs(tz - fz),
                 "color": color,
+                "world_center": world_center.tolist(),
+                "world_R": world_R.tolist(),
             })
         for child in part.get("children", []):
-            walk(child)
+            walk(child, own_origin_rest, world_origin, world_R)
 
     for p in root_parts:
         walk(p)
@@ -112,6 +137,8 @@ def build_bbmodel(model_name, root_parts, out_file):
                 "to": cube["to"],
                 "origin": part["origin"],
                 "uv_faces": uv_rects,
+                "world_center": leaf["world_center"],
+                "world_R": leaf["world_R"],
             })
 
         child_groups = [build_group(child) for child in part.get("children", [])]
@@ -119,6 +146,7 @@ def build_bbmodel(model_name, root_parts, out_file):
         return {
             "name": part["name"],
             "origin": part["origin"],
+            "rotation": part.get("rotation", [0, 0, 0]),
             "color": 0,
             "uuid": uid(),
             "export": True,
@@ -241,6 +269,7 @@ golem_boss = [
     {
         "name": "torso",
         "origin": [0, 10, 0],
+        "rotation": [22, 0, 0],  # forward hunch, pivoting at the hips/waist (this part's origin)
         "cubes": [
             # Torso built as stacked segments of varying width for a gorilla hourglass-ish
             # silhouette: broad chest/shoulders -> tapered waist -> hips flare back out.
@@ -253,21 +282,26 @@ golem_boss = [
             {"from": [-5, 10, -3.5], "to": [5, 14, 3.5], "color": "#7C6C59"},    # hips (flare for pelvis)
             {"from": [-2.5, 25.5, -2], "to": [2.5, 29, 2], "color": "#7A6A57"},  # trapezius / thick neck
         ],
-    },
-    {
-        "name": "head",
-        "origin": [0, 27.5, 0],
-        "cubes": [
-            {"from": [-3, 29, -3], "to": [3, 32.5, 2.5], "color": "#8A7A68"},     # cranium
-            {"from": [-2.8, 26, -2.8], "to": [2.8, 29, 2.8], "color": "#6E5C4C"},  # jaw block
-            {"from": [-2, 26.3, 2.5], "to": [2, 28, 5.2], "color": "#5C4B3D"},    # muzzle/snout
-            {"from": [-3, 29.8, 2.3], "to": [3, 30.6, 3.3], "color": "#4A3C30"},  # brow ridge
-            {"from": [3, 28, -1], "to": [4, 30, 1], "color": "#7A6A57"},         # left ear
-            {"from": [-4, 28, -1], "to": [-3, 30, 1], "color": "#7A6A57"},       # right ear
+        # head + both arm chains are nested here so they hunch forward together with the
+        # torso (rigidly, around the torso's own origin/pivot) instead of staying upright.
+        "children": [
+            {
+                "name": "head",
+                "origin": [0, 27.5, 0],
+                "cubes": [
+                    {"from": [-3, 29, -3], "to": [3, 32.5, 2.5], "color": "#8A7A68"},     # cranium
+                    {"from": [-2.8, 26, -2.8], "to": [2.8, 29, 2.8], "color": "#6E5C4C"},  # jaw block
+                    {"from": [-2, 26.3, 2.5], "to": [2, 28, 5.2], "color": "#5C4B3D"},    # muzzle/snout
+                    {"from": [-3, 29.8, 2.3], "to": [3, 30.6, 3.3], "color": "#4A3C30"},  # brow ridge
+                    {"from": [3, 28, -1], "to": [4, 30, 1], "color": "#7A6A57"},         # left ear
+                    {"from": [-4, 28, -1], "to": [-3, 30, 1], "color": "#7A6A57"},       # right ear
+                ],
+            },
+            arm_chain(1),   # left arm chain (shoulder/upper/forearm/fist)
+            arm_chain(-1),  # right arm chain
         ],
     },
-    arm_chain(1),   # left arm chain (shoulder/upper/forearm/fist)
-    arm_chain(-1),  # right arm chain
+    # Legs stay top-level (planted on the ground) -- they should NOT inherit the torso's lean.
     {
         "name": "left_leg",
         "origin": [3.5, 5, 0],

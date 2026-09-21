@@ -11,17 +11,21 @@ with open(cubes_file) as f:
     data = json.load(f)
 cubes = data["cubes"] if isinstance(data, dict) else data
 
-def cube_faces(f, t):
+def cube_faces(c):
     # Minecraft coords are (x, y_up, z). matplotlib's default vertical axis
     # is its own Z, so remap: mpl_x = mc_x, mpl_y = mc_z, mpl_z = mc_y (up).
-    x0, y0, z0 = f
-    x1, y1, z1 = t
-    x0, y0, z0 = x0, z0, y0
-    x1, y1, z1 = x1, z1, y1
-    pts = np.array([
-        [x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0],
-        [x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1],
-    ])
+    fx, fy, fz = c["from"]
+    tx, ty, tz = c["to"]
+    local_center = np.array([(fx + tx) / 2, (fy + ty) / 2, (fz + tz) / 2])
+    half = np.array([abs(tx - fx) / 2, abs(ty - fy) / 2, abs(tz - fz) / 2])
+    world_center = np.array(c.get("world_center", local_center.tolist()))
+    R = np.array(c.get("world_R", np.eye(3).tolist()))
+
+    signs = [(-1, -1, -1), (1, -1, -1), (1, 1, -1), (-1, 1, -1),
+             (-1, -1, 1), (1, -1, 1), (1, 1, 1), (-1, 1, 1)]
+    corners_mc = [world_center + R @ (half * np.array(s)) for s in signs]
+    pts = np.array([[p[0], p[2], p[1]] for p in corners_mc])  # mc(x,y,z) -> mpl(x,z,y)
+
     faces = [
         [pts[0], pts[1], pts[2], pts[3]],
         [pts[4], pts[5], pts[6], pts[7]],
@@ -30,7 +34,7 @@ def cube_faces(f, t):
         [pts[1], pts[2], pts[6], pts[5]],
         [pts[0], pts[3], pts[7], pts[4]],
     ]
-    return faces
+    return faces, pts
 
 colors = plt.cm.tab10.colors
 
@@ -39,17 +43,15 @@ def render(elev, azim, title, outfile):
     ax = fig.add_subplot(111, projection="3d")
     all_pts = []
     for i, c in enumerate(cubes):
-        faces = cube_faces(c["from"], c["to"])
+        faces, pts = cube_faces(c)
         poly = Poly3DCollection(faces, facecolor=colors[i % 10], edgecolor="black", linewidths=0.6, alpha=0.9)
         ax.add_collection3d(poly)
-        all_pts.extend(c["from"])
-        all_pts.extend(c["to"])
+        all_pts.extend(pts.tolist())
 
-    all_x = [c["from"][0] for c in cubes] + [c["to"][0] for c in cubes]
-    all_y = [c["from"][1] for c in cubes] + [c["to"][1] for c in cubes]
-    all_z = [c["from"][2] for c in cubes] + [c["to"][2] for c in cubes]
-    lim = max(max(abs(v) for v in all_x), max(abs(v) for v in all_z)) + 1
-    y_min, y_max = min(0, min(all_y)) - 1, max(all_y) + 1
+    all_pts = np.array(all_pts)
+    all_x, all_z_up, all_y = all_pts[:, 0], all_pts[:, 1], all_pts[:, 2]  # mpl axes: x, y(=mc z), z(=mc y/up)
+    lim = max(np.abs(all_x).max(), np.abs(all_z_up).max()) + 1
+    y_min, y_max = min(0, all_y.min()) - 1, all_y.max() + 1
     ax.set_xlim(-lim, lim)
     ax.set_ylim(-lim, lim)
     ax.set_zlim(y_min, y_max)

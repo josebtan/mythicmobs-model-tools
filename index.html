@@ -132,13 +132,30 @@ function buildModel(data) {
     const [x0, y0, z0] = c.from;
     const [x1, y1, z1] = c.to;
     const sx = Math.abs(x1 - x0), sy = Math.abs(y1 - y0), sz = Math.abs(z1 - z0);
-    const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, cz = (z0 + z1) / 2;
 
     const geom = new THREE.BoxGeometry(sx, sy, sz);
     if (isTextured && c.uv_faces) applyBoxUV(geom, c.uv_faces, texW, texH);
 
     const mesh = new THREE.Mesh(geom, material);
-    mesh.position.set(cx, cy, cz);
+
+    if (c.world_center && c.world_R) {
+      // world_R is a 3x3 rotation matrix (row-major) baked by build_bbmodel.py from the
+      // part hierarchy's `rotation` fields (e.g. the golem's forward hunch), composed
+      // down from parent bones -- same mechanism an animation would use, just static here.
+      const R = c.world_R;
+      const m4 = new THREE.Matrix4().set(
+        R[0][0], R[0][1], R[0][2], 0,
+        R[1][0], R[1][1], R[1][2], 0,
+        R[2][0], R[2][1], R[2][2], 0,
+        0, 0, 0, 1
+      );
+      mesh.quaternion.setFromRotationMatrix(m4);
+      mesh.position.set(c.world_center[0], c.world_center[1], c.world_center[2]);
+    } else {
+      const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, cz = (z0 + z1) / 2;
+      mesh.position.set(cx, cy, cz);
+    }
+
     mesh.name = c.name || 'cube';
 
     const edges = new THREE.EdgesGeometry(geom);
