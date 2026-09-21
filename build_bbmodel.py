@@ -1,19 +1,25 @@
-import json, uuid
+"""
+Generic .bbmodel builder with support for articulated bone hierarchies.
+
+Each "part" is a dict:
+{
+    "name": str,
+    "origin": [x, y, z],           # pivot point for this bone (for rotation/animation)
+    "cubes": [ {"from":[..], "to":[..]}, ... ],   # 0+ cuboids attached to this bone
+    "children": [ part, part, ... ]               # nested bones (e.g. forearm under upper arm)
+}
+
+This mirrors Blockbench's outliner group structure, so arms/legs built as a chain
+of parts (shoulder -> upper_arm -> forearm -> fist) become real animatable bones,
+not just floating cubes.
+"""
+import json
+import uuid
+
 
 def uid():
     return str(uuid.uuid4())
 
-# --- 1. Define the mob as a list of simple cuboids ---
-# Each cuboid: name, from [x,y,z], to [x,y,z], origin [x,y,z] (pivot for rotation)
-# Coordinates are in Minecraft "model units" (16 units = 1 block)
-cubes_def = [
-    {"name": "body",      "from": [-3, 6, -2], "to": [3, 14, 2],   "origin": [0, 10, 0]},
-    {"name": "head",      "from": [-2.5, 14, -2.5], "to": [2.5, 19, 2.5], "origin": [0, 14, 0]},
-    {"name": "left_arm",  "from": [3, 8, -1.5],  "to": [4.5, 14, 1.5],  "origin": [3, 14, 0]},
-    {"name": "right_arm", "from": [-4.5, 8, -1.5], "to": [-3, 14, 1.5], "origin": [-3, 14, 0]},
-    {"name": "left_leg",  "from": [0.5, 0, -1.5], "to": [3, 6, 1.5],   "origin": [1.75, 6, 0]},
-    {"name": "right_leg", "from": [-3, 0, -1.5], "to": [-0.5, 6, 1.5], "origin": [-1.75, 6, 0]},
-]
 
 def make_faces():
     return {
@@ -21,58 +27,149 @@ def make_faces():
         for f in ["north", "east", "south", "west", "up", "down"]
     }
 
-elements = []
-outliner_children = []
 
-for c in cubes_def:
-    cube_uuid = uid()
-    elements.append({
-        "name": c["name"],
-        "from": c["from"],
-        "to": c["to"],
-        "autouv": 1,
-        "color": 0,
-        "origin": c["origin"],
-        "uv_offset": [0, 0],
-        "faces": make_faces(),
-        "type": "cube",
-        "uuid": cube_uuid,
-    })
-    outliner_children.append(cube_uuid)
+def build_bbmodel(model_name, root_parts, out_file):
+    elements = []
+    flat_cubes = []  # for the simple renderer / web viewer
 
-bbmodel = {
-    "meta": {
-        "format_version": "4.5",
-        "model_format": "free",
-        "box_uv": False,
-    },
-    "name": "demo_mob",
-    "model_identifier": "",
-    "visible_box": [1, 1, 0],
-    "variable_placeholders": "",
-    "resolution": {"width": 16, "height": 16},
-    "elements": elements,
-    "outliner": [
-        {
-            "name": "root",
-            "origin": [0, 0, 0],
+    def build_group(part):
+        cube_uuids = []
+        for i, cube in enumerate(part.get("cubes", [])):
+            cube_uuid = uid()
+            elements.append({
+                "name": f'{part["name"]}_{i}' if len(part.get("cubes", [])) > 1 else part["name"],
+                "from": cube["from"],
+                "to": cube["to"],
+                "autouv": 1,
+                "color": 0,
+                "origin": part["origin"],
+                "uv_offset": [0, 0],
+                "faces": make_faces(),
+                "type": "cube",
+                "uuid": cube_uuid,
+            })
+            cube_uuids.append(cube_uuid)
+            flat_cubes.append({
+                "name": part["name"],
+                "from": cube["from"],
+                "to": cube["to"],
+                "origin": part["origin"],
+            })
+
+        child_groups = [build_group(child) for child in part.get("children", [])]
+
+        return {
+            "name": part["name"],
+            "origin": part["origin"],
             "color": 0,
             "uuid": uid(),
             "export": True,
             "isOpen": True,
             "locked": False,
             "visibility": True,
-            "children": outliner_children,
+            "children": cube_uuids + child_groups,
         }
-    ],
-    "textures": [],
-}
 
-with open("demo_mob.bbmodel", "w") as f:
-    json.dump(bbmodel, f, indent=2)
+    outliner = [build_group(p) for p in root_parts]
 
-print("Wrote demo_mob.bbmodel with", len(cubes_def), "cubes")
+    bbmodel = {
+        "meta": {
+            "format_version": "4.5",
+            "model_format": "free",
+            "box_uv": False,
+        },
+        "name": model_name,
+        "model_identifier": "",
+        "visible_box": [1, 1, 0],
+        "variable_placeholders": "",
+        "resolution": {"width": 32, "height": 32},
+        "elements": elements,
+        "outliner": outliner,
+        "textures": [],
+    }
 
-# Also dump the raw cube list for the renderer to reuse (avoids re-parsing bbmodel format)
-with open("cubes.json", "w") as f:
-    json.dump(cubes_def, f)
+    with open(out_file, "w") as f:
+        json.dump(bbmodel, f, indent=2)
+
+    cubes_file = out_file.replace(".bbmodel", "_cubes.json")
+    with open(cubes_file, "w") as f:
+        json.dump(flat_cubes, f)
+
+    print(f"Wrote {out_file} ({len(elements)} cubes) and {cubes_file}")
+    return cubes_file
+
+
+# ---------------------------------------------------------------------------
+# Model 1: demo_mob - simple humanoid (kept for reference / comparison)
+# ---------------------------------------------------------------------------
+demo_mob = [
+    {"name": "body", "origin": [0, 10, 0], "cubes": [{"from": [-3, 6, -2], "to": [3, 14, 2]}]},
+    {"name": "head", "origin": [0, 14, 0], "cubes": [{"from": [-2.5, 14, -2.5], "to": [2.5, 19, 2.5]}]},
+    {"name": "left_arm", "origin": [3, 14, 0], "cubes": [{"from": [3, 8, -1.5], "to": [4.5, 14, 1.5]}]},
+    {"name": "right_arm", "origin": [-3, 14, 0], "cubes": [{"from": [-4.5, 8, -1.5], "to": [-3, 14, 1.5]}]},
+    {"name": "left_leg", "origin": [1.75, 6, 0], "cubes": [{"from": [0.5, 0, -1.5], "to": [3, 6, 1.5]}]},
+    {"name": "right_leg", "origin": [-1.75, 6, 0], "cubes": [{"from": [-3, 0, -1.5], "to": [-0.5, 6, 1.5]}]},
+]
+
+# ---------------------------------------------------------------------------
+# Model 2: golem_boss - tanque musculoso, brazos largos y articulados
+# ---------------------------------------------------------------------------
+def arm_chain(side):
+    """side = 1 (left, +x) or -1 (right, -x). Builds shoulder -> upper_arm -> forearm -> fist."""
+    s = side
+    tag = "left" if s > 0 else "right"
+    return {
+        "name": f"{tag}_shoulder",
+        "origin": [s * 9, 25, 0],
+        "cubes": [{"from": [s * 6, 22, -5], "to": [s * 12, 28, 5]}],
+        "children": [{
+            "name": f"{tag}_upper_arm",
+            "origin": [s * 9, 22, 0],
+            "cubes": [{"from": [s * 7, 10, -3], "to": [s * 11, 22, 3]}],
+            "children": [{
+                "name": f"{tag}_forearm",
+                "origin": [s * 9, 10, 0],
+                "cubes": [{"from": [s * 6, -2, -3], "to": [s * 11, 10, 3]}],
+                "children": [{
+                    "name": f"{tag}_fist",
+                    "origin": [s * 8.5, -2, 0],
+                    "cubes": [{"from": [s * 5, -8, -5], "to": [s * 12, -2, 5]}],
+                    "children": [],
+                }],
+            }],
+        }],
+    }
+
+
+golem_boss = [
+    {
+        "name": "torso",
+        "origin": [0, 10, 0],
+        "cubes": [
+            {"from": [-6, 10, -4], "to": [6, 26, 4]},   # main torso block, wide & thick
+            {"from": [-5, 20, 4], "to": [5, 26, 6]},    # chest muscle plate (protrudes forward)
+        ],
+    },
+    {
+        "name": "head",
+        "origin": [0, 26, 0],
+        "cubes": [{"from": [-3, 26, -3], "to": [3, 32, 3]}],  # small head = tank silhouette
+    },
+    arm_chain(1),   # left arm chain (shoulder/upper/forearm/fist)
+    arm_chain(-1),  # right arm chain
+    {
+        "name": "left_leg",
+        "origin": [3.5, 5, 0],
+        "cubes": [{"from": [1, 0, -4], "to": [6, 10, 4]}],
+    },
+    {
+        "name": "right_leg",
+        "origin": [-3.5, 5, 0],
+        "cubes": [{"from": [-6, 0, -4], "to": [-1, 10, 4]}],
+    },
+]
+
+
+if __name__ == "__main__":
+    build_bbmodel("demo_mob", demo_mob, "demo_mob.bbmodel")
+    build_bbmodel("golem_boss", golem_boss, "golem_boss.bbmodel")
