@@ -83,8 +83,13 @@
     <div class="row">
       <div id="textureToggle" class="btn active">Textura</div>
     </div>
+    <div>
+      <label for="animPicker">Animación</label>
+      <select id="animPicker">
+        <option value="">Ninguna (pose base)</option>
+      </select>
+    </div>
     <div class="row">
-      <div id="animToggle" class="btn">Animación idle</div>
       <div id="rotateToggle" class="btn">Auto-rotar</div>
     </div>
     <a id="downloadBtn" class="btn" download>Descargar .bbmodel</a>
@@ -133,8 +138,9 @@ scene.add(grid);
 // positioned at that bone's origin relative to its parent, with the bone's own
 // rotation applied to the Group). Rotating a Group rotates everything parented under
 // it automatically -- the same mechanism build_bbmodel.py used to bake the golem's
-// forward hunch, except here it's live, so it's also what animation hooks into
-// (see playIdleAnimation below): tween a bone Group's .rotation over time.
+// forward hunch. Real keyframe animations (see applyAnimationFrame near the bottom)
+// hook into this exact same mechanism, just varying each bone's rotation/position
+// over time instead of leaving it static.
 // ---------------------------------------------------------------------------
 
 let currentGroup = null;
@@ -184,6 +190,7 @@ function buildBone(node, sharedTexturedMat, texW, texH) {
     THREE.MathUtils.degToRad(rot[2])
   );
   group.name = node.name;
+  group.userData.baseRotation = { x: rot[0], y: rot[1], z: rot[2] };
   boneGroups[node.name] = group;
 
   (node.cubes || []).forEach((c) => {
@@ -262,8 +269,24 @@ function buildModel(data) {
   scene.add(outer);
   currentGroup = outer;
 
+  currentAnimations = data.animations || {};
+  populateAnimPicker();
+
   document.getElementById('stats').textContent =
     `${Object.keys(boneGroups).length} huesos · ${data.cubes ? data.cubes.length : '?'} cubos`;
+}
+
+function populateAnimPicker() {
+  animPicker.innerHTML = '<option value="">Ninguna (pose base)</option>';
+  Object.keys(currentAnimations).forEach((name) => {
+    const opt = document.createElement('option');
+    opt.value = name;
+    opt.textContent = name;
+    animPicker.appendChild(opt);
+  });
+  currentAnimName = '';
+  animPicker.value = '';
+  resetPose();
 }
 
 function loadModel(path) {
@@ -280,8 +303,12 @@ function loadModel(path) {
 const picker = document.getElementById('modelPicker');
 const downloadBtn = document.getElementById('downloadBtn');
 const textureToggle = document.getElementById('textureToggle');
-const animToggle = document.getElementById('animToggle');
+const animPicker = document.getElementById('animPicker');
 const rotateToggle = document.getElementById('rotateToggle');
+
+let currentAnimations = {};
+let currentAnimName = '';
+let animStartTime = 0;
 
 function syncDownloadLink() {
   const opt = picker.options[picker.selectedIndex];
@@ -303,10 +330,10 @@ textureToggle.addEventListener('click', () => {
   });
 });
 
-let animOn = false;
-animToggle.addEventListener('click', () => {
-  animOn = !animOn;
-  animToggle.classList.toggle('active', animOn);
+animPicker.addEventListener('change', (e) => {
+  currentAnimName = e.target.value;
+  animStartTime = clock.getElapsedTime();
+  if (!currentAnimName) resetPose();
 });
 
 let autoRotate = false;
@@ -325,36 +352,62 @@ window.addEventListener('resize', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Demo idle animation: a simple proof that the bone hierarchy above is real --
-// tweening a bone Group's local transform (on top of its authored base rotation,
-// e.g. the golem's forward hunch) is literally all a keyframe animation system
-// needs to do. This is hand-written sine easing, not a real keyframe track yet
-// (see README roadmap), but it drives the exact same mechanism one would.
-//
-// Only the torso's own position bobs up/down (a breathing motion) -- since head
-// and both arms are nested *inside* the torso bone, they ride along with it for
-// free via the scene graph. Legs are separate root-level bones, so they stay
-// planted on the ground. A small extra rotation on the arms adds a gentle sway
-// on top of that shared motion.
+// Generic keyframe playback. `track` is a list of {time, rotation?, position?}
+// sorted by time; rotation/position values are DELTAS on top of each bone's own
+// rest pose (userData.baseRotation / userData.basePosition) -- same convention
+// as the .bbmodel export, so what plays here matches what Blockbench/ModelEngine
+// would play from the same file.
 // ---------------------------------------------------------------------------
-function playIdleAnimation(t) {
-  const breathe = Math.sin(t * 1.6);           // -1..1
-  const torso = boneGroups['torso'];
-  if (torso && torso.userData.basePosition) {
-    torso.position.y = torso.userData.basePosition.y + breathe * 0.35;
+function lerp3(a, b, f) {
+  return { x: a[0] + (b[0] - a[0]) * f, y: a[1] + (b[1] - a[1]) * f, z: a[2] + (b[2] - a[2]) * f };
+}
+
+function sampleTrack(track, t) {
+  if (!track.length) return {};
+  const pluck = (kf) => ({
+    rot: kf.rotation ? { x: kf.rotation[0], y: kf.rotation[1], z: kf.rotation[2] } : null,
+    pos: kf.position ? { x: kf.position[0], y: kf.position[1], z: kf.position[2] } : null,
+  });
+  if (t <= track[0].time) return pluck(track[0]);
+  if (t >= track[track.length - 1].time) return pluck(track[track.length - 1]);
+  for (let i = 0; i < track.length - 1; i++) {
+    const a = track[i], b = track[i + 1];
+    if (t >= a.time && t <= b.time) {
+      const f = (b.time - a.time) > 0 ? (t - a.time) / (b.time - a.time) : 0;
+      return {
+        rot: (a.rotation && b.rotation) ? lerp3(a.rotation, b.rotation, f) : null,
+        pos: (a.position && b.position) ? lerp3(a.position, b.position, f) : null,
+      };
+    }
   }
-  ['left_upper_arm', 'right_upper_arm'].forEach((name, i) => {
-    const g = boneGroups[name];
-    if (g) g.rotation.x = THREE.MathUtils.degToRad(breathe * 2.5 * (i === 0 ? 1 : -1));
+  return {};
+}
+
+function resetPose() {
+  Object.values(boneGroups).forEach((g) => {
+    const br = g.userData.baseRotation, bp = g.userData.basePosition;
+    if (br) g.rotation.set(THREE.MathUtils.degToRad(br.x), THREE.MathUtils.degToRad(br.y), THREE.MathUtils.degToRad(br.z));
+    if (bp) g.position.copy(bp);
   });
 }
 
-function resetIdlePose() {
-  const torso = boneGroups['torso'];
-  if (torso && torso.userData.basePosition) torso.position.y = torso.userData.basePosition.y;
-  ['left_upper_arm', 'right_upper_arm'].forEach((name) => {
-    const g = boneGroups[name];
-    if (g) g.rotation.x = 0;
+function applyAnimationFrame(name, t) {
+  const anim = currentAnimations[name];
+  if (!anim) return;
+  const localT = anim.loop ? (t % anim.length) : Math.min(t, anim.length);
+  Object.entries(anim.tracks).forEach(([boneName, track]) => {
+    const g = boneGroups[boneName];
+    if (!g) return;
+    const { rot, pos } = sampleTrack(track, localT);
+    const br = g.userData.baseRotation, bp = g.userData.basePosition;
+    if (rot && br) {
+      g.rotation.set(
+        THREE.MathUtils.degToRad(br.x + rot.x),
+        THREE.MathUtils.degToRad(br.y + rot.y),
+        THREE.MathUtils.degToRad(br.z + rot.z)
+      );
+    }
+    if (pos && bp) g.position.set(bp.x + pos.x, bp.y + pos.y, bp.z + pos.z);
   });
 }
 
@@ -363,8 +416,7 @@ function animate() {
   requestAnimationFrame(animate);
   controls.update();
   if (autoRotate && currentGroup) currentGroup.rotation.y += 0.006;
-  if (animOn) playIdleAnimation(clock.getElapsedTime());
-  else resetIdlePose();
+  if (currentAnimName) applyAnimationFrame(currentAnimName, clock.getElapsedTime() - animStartTime);
   renderer.render(scene, camera);
 }
 animate();

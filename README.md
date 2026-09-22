@@ -19,14 +19,15 @@ renderizada para validar proporciones antes de abrirlos en Blockbench.
   planos, no usa la textura real).
   Uso: `python3 render_preview.py <nombre>_cubes.json`
 - `index.html` — visor 3D interactivo (Three.js) publicado vía GitHub Pages, con selector de
-  modelo, textura real aplicada por UV, y botón de descarga del `.bbmodel`.
+  modelo, textura real aplicada por UV, selector de **animaciones** (keyframes reales), y botón de
+  descarga del `.bbmodel`.
 
 ### Modelos incluidos
 
 | Modelo | Archivo | Descripción |
 |---|---|---|
-| `demo_mob` | `demo_mob.bbmodel` | Humanoide básico de referencia (cabeza, torso, brazos, piernas). |
-| `golem_boss` | `golem_boss.bbmodel` | Boss tipo tanque: torso ancho y musculoso, cabeza pequeña, hombreras, brazos largos y articulados (hombro→antebrazo→puño) que cuelgan por debajo de las piernas, piernas gruesas. |
+| `demo_mob` | `demo_mob.bbmodel` | Humanoide básico de referencia (cabeza, torso, brazos, piernas). Sin animaciones. |
+| `golem_boss` | `golem_boss.bbmodel` | Boss tipo tanque/gorila: torso ancho y musculoso, cabeza pequeña, hombreras, brazos largos y articulados (hombro→antebrazo→puño), encorvado hacia adelante. Animaciones: `idle`, `walk`, `attack`, `death`. |
 
 ## Uso
 
@@ -51,8 +52,8 @@ Página estática con Three.js. Controles:
 - Selector de modelo.
 - **Textura on/off** — alterna entre la textura real y el color plano por cubo (útil para revisar
   proporciones/silueta sin que la textura distraiga).
-- **Animación idle** — respiración: el torso sube/baja levemente (las piernas quedan fijas en el
-  piso), y los brazos —al colgar del torso— acompañan ese movimiento más un leve balanceo propio.
+- **Animación** (selector) — `idle`, `walk`, `attack`, `death` para el golem. Reproduce keyframes
+  reales interpolados en vivo (ver sección Animaciones abajo).
 - **Auto-rotar** — gira el modelo solo, para verlo desde todos los ángulos sin tocar el mouse.
 - Botón de descarga del `.bbmodel` del modelo activo.
 - Panel responsive: en pantallas angostas los paneles pasan a ocupar el ancho completo en vez de
@@ -62,28 +63,48 @@ El modelo se construye en el visor como una **jerarquía real de huesos** (un `T
 hueso, anidado igual que en `build_bbmodel.py`), no como una lista plana de cubos — es lo que
 permite tanto el encorvado del golem como la animación de abajo.
 
-## Animaciones: cómo funcionan (y qué falta)
+## Animaciones
 
-El mecanismo ya está: cada hueso tiene una `rotation` propia que pivota alrededor de su `origin`, y
-los hijos (ej. brazo colgando del hombro) heredan la rotación de sus padres automáticamente — así
-armamos la postura encorvada del golem. **Animar es lo mismo, pero variando esa rotación en el
-tiempo en vez de dejarla fija.**
+Cada hueso tiene una `rotation` (y opcionalmente `position`) propia que pivota alrededor de su
+`origin`, y los hijos (ej. brazo colgando del hombro) heredan la transformación de sus padres
+automáticamente — así armamos la postura encorvada del golem. Una animación es exactamente lo
+mismo, pero variando esos valores en el tiempo: por eso los clips se definen como **deltas** sobre
+la pose de reposo de cada hueso (ej. el torso del golem tiene 22° de encorvado en reposo; la
+animación `death` le suma +73° más, hasta ~95° total — nunca se pisan).
 
-En el visor esto ya corre en vivo: `playIdleAnimation()` en `index.html` sube/baja
-`boneGroups['torso'].position.y` (respiración) y agrega un leve `rotation.x` a
-`left_upper_arm`/`right_upper_arm` (balanceo) — activalo con el botón "Animación idle". Como la
-cabeza y los brazos están anidados **dentro** del hueso del torso, heredan su movimiento gratis por
-la jerarquía de la escena; las piernas, al ser huesos raíz separados, no se mueven. Es una prueba de
-concepto escrita a mano, todavía no un sistema de keyframes real. Para eso falta:
+**Definir un clip** (en `build_bbmodel.py`, junto a `golem_boss_animations`):
+```python
+"idle": {
+    "loop": True, "length": 2.0,
+    "keyframes": {
+        "torso": [(0.0, {"position": [0,0,0]}), (1.0, {"position": [0,0.35,0]}), (2.0, {"position": [0,0,0]})],
+    },
+},
+```
+`time` en segundos, `rotation`/`position` como deltas `[x,y,z]`. Un hueso puede tener ambos
+canales si en algún keyframe define los dos (ver `death`, que combina `rotation` + `position` en
+el torso).
 
-1. **Definir clips en Python**: en `build_bbmodel.py`, algo como
-   `animations = {"idle": {"length": 1.0, "loop": True, "keyframes": {"torso": [(0, [0,0,0]), (0.5, [0,0,3]), (1.0, [0,0,0])]}}}`
-   por hueso, con tiempo → rotación.
-2. **Exportar al `.bbmodel`**: Blockbench tiene un campo `"animations"` en el JSON con ese mismo
-   formato (channels de `rotation`/`position` por nombre de hueso) — así el clip también se ve y se
-   edita en Blockbench, y ModelEngine lo puede reproducir en el server.
-3. **Interpolar en el visor**: en vez de una función seno a mano, leer los keyframes del JSON e
-   interpolar (lineal o con easing) entre ellos según el tiempo — reemplaza a `playIdleAnimation`.
+**Dónde termina**: `build_bbmodel_animations()` convierte esto al campo `"animations"` del
+`.bbmodel` (formato nativo de Blockbench — channels `rotation`/`position` por uuid de hueso), así
+que el mismo clip se puede abrir, ver y retocar directamente en Blockbench, y ModelEngine lo
+reproduce en el server tal cual. `export_animations_for_viewer()` exporta una versión más liviana
+(por nombre de hueso, no uuid) al `*_cubes.json` para el visor web.
+
+**En el visor**: `applyAnimationFrame()` en `index.html` interpola linealmente entre keyframes
+(`sampleTrack`) y aplica el delta sobre la rotación/posición base de cada `THREE.Group` — sin
+funciones seno a mano, lee los keyframes reales del JSON. El selector "Animación" del panel elige
+el clip; las que tienen `loop: false` (`attack`, `death`) se reproducen una vez y quedan en el
+último frame.
+
+**Animaciones del golem:**
+- `idle` — respiración: el torso sube/baja levemente (cabeza y brazos lo acompañan por estar
+  anidados dentro), leve balanceo de brazos. Piernas fijas.
+- `walk` — piernas alternan adelante/atrás, brazos contra-balancean estilo "knuckle-walk", torso
+  rebota con cada paso.
+- `attack` — brazos se preparan hacia atrás y golpean hacia adelante/abajo juntos, torso acompaña
+  el impulso. No repite (`loop: false`).
+- `death` — el torso cae hacia adelante y se hunde, piernas ceden hacia los costados. No repite.
 
 ## Por qué existe esto
 
@@ -94,7 +115,8 @@ poder iterar sobre las proporciones y la ubicación de las piezas sin trabajar c
 
 ## Roadmap / ideas pendientes
 
-- Sistema de keyframes real (ver sección Animaciones arriba) en vez de la demo por seno.
+- Interpolación con easing (no solo lineal) para animaciones más "pesadas"/orgánicas.
+- Blending entre animaciones (ej. transición suave `idle` → `walk` en vez de corte seco).
 - Texturas más elaboradas: patrones (rayas, manchas, pelaje), no solo color plano + ruido.
 - Revisar orientación exacta del UV por cara en el visor (`applyBoxUV` en `index.html`) — puede haber
   alguna cara reflejada/rotada respecto al eje esperado; se corrige a ojo comparando contra Blockbench.

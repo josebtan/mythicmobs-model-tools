@@ -50,7 +50,68 @@ PART_COLORS = {
 }
 
 
-def build_bbmodel(model_name, root_parts, out_file):
+def build_bbmodel_animations(animations, bone_uuid_by_name):
+    """
+    Convert our authoring format:
+        {"idle": {"loop": True, "length": 2.0,
+                   "keyframes": {"torso": [(0, {"position":[0,0,0]}), (1.0, {"position":[0,0.35,0]})]}}}
+    into Blockbench's `.bbmodel` "animations" array format (per-bone animators keyed by bone uuid,
+    each channel's keyframes as separate entries). Rotation/position values are DELTAS on top of the
+    bone's own rest-pose `rotation`/`origin` -- exactly how Blockbench/ModelEngine interpret them.
+    """
+    result = []
+    for anim_name, anim in animations.items():
+        animators = {}
+        for bone_name, kfs in anim["keyframes"].items():
+            b_uuid = bone_uuid_by_name.get(bone_name)
+            if not b_uuid:
+                continue
+            keyframes = []
+            for time, data in kfs:
+                for channel in ("rotation", "position"):
+                    if channel in data:
+                        x, y, z = data[channel]
+                        keyframes.append({
+                            "channel": channel,
+                            "data_points": [{"x": str(x), "y": str(y), "z": str(z)}],
+                            "uuid": uid(),
+                            "time": time,
+                            "color": -1,
+                            "interpolation": "linear",
+                        })
+            animators[b_uuid] = {"name": bone_name, "type": "bone", "keyframes": keyframes}
+        result.append({
+            "uuid": uid(),
+            "name": anim_name,
+            "loop": "loop" if anim.get("loop") else "once",
+            "override": False,
+            "length": anim["length"],
+            "snapping": 24,
+            "selected": False,
+            "anim_time_update": "",
+            "blend_weight": "",
+            "start_delay": "",
+            "loop_delay": "",
+            "animators": animators,
+        })
+    return result
+
+
+def export_animations_for_viewer(animations):
+    """Simplified JSON for index.html: {name: {loop, length, tracks: {bone_name: [{time,rotation?,position?}]}}}"""
+    out = {}
+    for anim_name, anim in animations.items():
+        tracks = {}
+        for bone_name, kfs in anim["keyframes"].items():
+            tracks[bone_name] = [
+                {"time": t, **{k: v for k, v in data.items() if k in ("rotation", "position")}}
+                for t, data in kfs
+            ]
+        out[anim_name] = {"loop": bool(anim.get("loop")), "length": anim["length"], "tracks": tracks}
+    return out
+
+
+def build_bbmodel(model_name, root_parts, out_file, animations=None):
     # --- Pass 1: walk the tree, collect leaf cubes (geometry + color + owning part)      ---
     # Also compute each cube's WORLD center + WORLD rotation matrix by composing bone-level
     # `rotation` (degrees, pivoting around that bone's own `origin`) down the hierarchy.
@@ -104,6 +165,7 @@ def build_bbmodel(model_name, root_parts, out_file):
     elements = []
     flat_cubes = []  # for the matplotlib renderer + web viewer
     cube_cursor = [0]  # index into leaf_cubes / uv_by_index, shared via closure
+    bone_uuid_by_name = {}  # part name -> outliner group uuid, needed to wire up animations
 
     def make_faces(uv_rects):
         return {face: {"uv": rect, "texture": 0} for face, rect in uv_rects.items()}
@@ -167,6 +229,7 @@ def build_bbmodel(model_name, root_parts, out_file):
             "visibility": True,
             "children": cube_uuids + child_groups,
         }
+        bone_uuid_by_name[part["name"]] = outliner_group["uuid"]
         skeleton_node = {
             "name": part["name"],
             "origin": part["origin"],
@@ -183,6 +246,8 @@ def build_bbmodel(model_name, root_parts, out_file):
         outliner.append(g)
         skeleton.append(s)
 
+    bbmodel_animations = build_bbmodel_animations(animations, bone_uuid_by_name) if animations else []
+
     texture_uuid = uid()
     bbmodel = {
         "meta": {
@@ -197,6 +262,7 @@ def build_bbmodel(model_name, root_parts, out_file):
         "resolution": {"width": atlas_w, "height": atlas_h},
         "elements": elements,
         "outliner": outliner,
+        "animations": bbmodel_animations,
         "textures": [{
             "path": "",
             "name": texture_file.split("/")[-1],
@@ -234,6 +300,7 @@ def build_bbmodel(model_name, root_parts, out_file):
             "texture_size": [atlas_w, atlas_h],
             "cubes": flat_cubes,
             "skeleton": skeleton,
+            "animations": export_animations_for_viewer(animations) if animations else {},
         }, f)
 
     print(f"Wrote {out_file} ({len(elements)} cubes), {texture_file} ({atlas_w}x{atlas_h}), {cubes_file}")
@@ -358,7 +425,109 @@ golem_boss = [
     },
 ]
 
+# ---------------------------------------------------------------------------
+# Animations (golem_boss). Rotation/position values are DELTAS on top of each
+# bone's own rest-pose rotation/origin (e.g. torso's HUNCH_DEG stays as the
+# base; "idle" adds 0 rotation delta to it, "death" adds +73 to reach ~95 total).
+# ---------------------------------------------------------------------------
+golem_boss_animations = {
+    "idle": {
+        "loop": True, "length": 2.0,
+        "keyframes": {
+            "torso": [
+                (0.0, {"position": [0, 0, 0]}),
+                (1.0, {"position": [0, 0.35, 0]}),
+                (2.0, {"position": [0, 0, 0]}),
+            ],
+            "left_upper_arm": [
+                (0.0, {"rotation": [0, 0, 0]}),
+                (1.0, {"rotation": [2.5, 0, 0]}),
+                (2.0, {"rotation": [0, 0, 0]}),
+            ],
+            "right_upper_arm": [
+                (0.0, {"rotation": [0, 0, 0]}),
+                (1.0, {"rotation": [-2.5, 0, 0]}),
+                (2.0, {"rotation": [0, 0, 0]}),
+            ],
+        },
+    },
+    "walk": {
+        "loop": True, "length": 1.0,
+        "keyframes": {
+            "torso": [
+                (0.0, {"position": [0, 0, 0]}),
+                (0.25, {"position": [0, 0.6, 0]}),
+                (0.5, {"position": [0, 0, 0]}),
+                (0.75, {"position": [0, 0.6, 0]}),
+                (1.0, {"position": [0, 0, 0]}),
+            ],
+            "left_leg": [
+                (0.0, {"rotation": [-25, 0, 0]}),
+                (0.5, {"rotation": [25, 0, 0]}),
+                (1.0, {"rotation": [-25, 0, 0]}),
+            ],
+            "right_leg": [
+                (0.0, {"rotation": [25, 0, 0]}),
+                (0.5, {"rotation": [-25, 0, 0]}),
+                (1.0, {"rotation": [25, 0, 0]}),
+            ],
+            # arms counter-swing opposite their same-side leg, knuckle-walk style
+            "left_upper_arm": [
+                (0.0, {"rotation": [20, 0, 0]}),
+                (0.5, {"rotation": [-20, 0, 0]}),
+                (1.0, {"rotation": [20, 0, 0]}),
+            ],
+            "right_upper_arm": [
+                (0.0, {"rotation": [-20, 0, 0]}),
+                (0.5, {"rotation": [20, 0, 0]}),
+                (1.0, {"rotation": [-20, 0, 0]}),
+            ],
+        },
+    },
+    "attack": {
+        "loop": False, "length": 0.8,
+        "keyframes": {
+            # windup (arms pull back/up), then both fists smash forward/down together
+            "torso": [
+                (0.0, {"rotation": [0, 0, 0]}),
+                (0.25, {"rotation": [-10, 0, 0]}),
+                (0.45, {"rotation": [15, 0, 0]}),
+                (0.8, {"rotation": [0, 0, 0]}),
+            ],
+            "left_upper_arm": [
+                (0.0, {"rotation": [0, 0, 0]}),
+                (0.25, {"rotation": [-45, 0, 20]}),
+                (0.45, {"rotation": [75, 0, -15]}),
+                (0.8, {"rotation": [0, 0, 0]}),
+            ],
+            "right_upper_arm": [
+                (0.0, {"rotation": [0, 0, 0]}),
+                (0.25, {"rotation": [-45, 0, -20]}),
+                (0.45, {"rotation": [75, 0, 15]}),
+                (0.8, {"rotation": [0, 0, 0]}),
+            ],
+        },
+    },
+    "death": {
+        "loop": False, "length": 1.4,
+        "keyframes": {
+            "torso": [
+                (0.0, {"rotation": [0, 0, 0], "position": [0, 0, 0]}),
+                (1.4, {"rotation": [73, 0, 8], "position": [0, -14, 6]}),
+            ],
+            "left_leg": [
+                (0.0, {"rotation": [0, 0, 0]}),
+                (1.4, {"rotation": [-20, 0, 12]}),
+            ],
+            "right_leg": [
+                (0.0, {"rotation": [0, 0, 0]}),
+                (1.4, {"rotation": [20, 0, -12]}),
+            ],
+        },
+    },
+}
+
 
 if __name__ == "__main__":
     build_bbmodel("demo_mob", demo_mob, "demo_mob.bbmodel")
-    build_bbmodel("golem_boss", golem_boss, "golem_boss.bbmodel")
+    build_bbmodel("golem_boss", golem_boss, "golem_boss.bbmodel", animations=golem_boss_animations)
