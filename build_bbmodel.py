@@ -545,37 +545,50 @@ golem_boss_animations = {
         },
     },
     "run": {
-        "loop": True, "length": 0.6,
+        "loop": True, "length": 0.8,
         "keyframes": {
-            # Faster, more exaggerated than `walk`, with the arms spending more time swung
-            # forward/down (knuckle-dragging) -- approximating a gorilla's quadrupedal-ish
-            # gallop rather than a plain bipedal jog.
+            # A 2-beat "bound" gait, not an alternating walk: BOTH arms plant forward together,
+            # the torso swings/swoops forward and down over them, then BOTH legs land together
+            # further forward while the arms release and swing through the air to reach for the
+            # next plant -- the loping gait of orangutans/gorillas moving on the ground, not a
+            # sped-up bipedal jog.
             "torso": [
-                (0.0, {"rotation": [10, 0, 0], "position": [0, 0, 0]}),
-                (0.15, {"rotation": [-6, 0, 0], "position": [0, 1.3, 0]}),
-                (0.30, {"rotation": [10, 0, 0], "position": [0, 0, 0]}),
-                (0.45, {"rotation": [-6, 0, 0], "position": [0, 1.3, 0]}),
-                (0.60, {"rotation": [10, 0, 0], "position": [0, 0, 0]}),
+                (0.00, {"rotation": [35, 0, 0], "position": [0, -1.6, 1.6]}),   # low, arms just planted
+                (0.23, {"rotation": [14, 0, 0], "position": [0, 1.0, 0.6]}),    # swinging up/forward over the arms
+                (0.46, {"rotation": [4, 0, 0], "position": [0, 1.9, -0.6]}),    # peak: most upright, legs land
+                (0.63, {"rotation": [20, 0, 0], "position": [0, 0.2, 0.6]}),    # pitching forward again
+                (0.80, {"rotation": [35, 0, 0], "position": [0, -1.6, 1.6]}),   # planted again (loops to 0.00)
             ],
-            "left_leg": [
-                (0.0, {"rotation": [-38, 0, 0]}),
-                (0.30, {"rotation": [38, 0, 0]}),
-                (0.60, {"rotation": [-38, 0, 0]}),
-            ],
-            "right_leg": [
-                (0.0, {"rotation": [38, 0, 0]}),
-                (0.30, {"rotation": [-38, 0, 0]}),
-                (0.60, {"rotation": [38, 0, 0]}),
-            ],
+            # Both arms move together (support side), not mirrored/alternating.
             "left_upper_arm": [
-                (0.0, {"rotation": [45, 0, 0]}),
-                (0.30, {"rotation": [-28, 0, 0]}),
-                (0.60, {"rotation": [45, 0, 0]}),
+                (0.00, {"rotation": [95, 0, 8]}),     # planted forward, near max reach
+                (0.23, {"rotation": [55, 0, 6]}),      # trailing as the body swings past
+                (0.46, {"rotation": [-75, 0, 4]}),     # released, swinging back-and-up (recovery)
+                (0.63, {"rotation": [15, 0, 6]}),       # swinging forward for the next plant
+                (0.80, {"rotation": [95, 0, 8]}),
             ],
             "right_upper_arm": [
-                (0.0, {"rotation": [-28, 0, 0]}),
-                (0.30, {"rotation": [45, 0, 0]}),
-                (0.60, {"rotation": [-28, 0, 0]}),
+                (0.00, {"rotation": [95, 0, -8]}),
+                (0.23, {"rotation": [55, 0, -6]}),
+                (0.46, {"rotation": [-75, 0, -4]}),
+                (0.63, {"rotation": [15, 0, -6]}),
+                (0.80, {"rotation": [95, 0, -8]}),
+            ],
+            # Both legs also move together, roughly opposite phase to the arms: trailing while
+            # the arms are planted, swinging forward together to land around the torso's peak.
+            "left_leg": [
+                (0.00, {"rotation": [-32, 0, 4]}),
+                (0.23, {"rotation": [8, 0, 3]}),
+                (0.46, {"rotation": [42, 0, 2]}),
+                (0.63, {"rotation": [10, 0, 3]}),
+                (0.80, {"rotation": [-32, 0, 4]}),
+            ],
+            "right_leg": [
+                (0.00, {"rotation": [-32, 0, -4]}),
+                (0.23, {"rotation": [8, 0, -3]}),
+                (0.46, {"rotation": [42, 0, -2]}),
+                (0.63, {"rotation": [10, 0, -3]}),
+                (0.80, {"rotation": [-32, 0, -4]}),
             ],
         },
     },

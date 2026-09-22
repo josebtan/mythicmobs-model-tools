@@ -27,7 +27,7 @@ renderizada para validar proporciones antes de abrirlos en Blockbench.
 | Modelo | Archivo | Descripción |
 |---|---|---|
 | `demo_mob` | `demo_mob.bbmodel` | Humanoide básico de referencia (cabeza, torso, brazos, piernas). Sin animaciones. |
-| `golem_boss` | `golem_boss.bbmodel` | Boss tipo tanque/gorila: torso ancho y musculoso, cabeza pequeña, hombreras, brazos largos y articulados (hombro→antebrazo→puño), encorvado hacia adelante. Animaciones: `idle`, `walk`, `attack`, `death`. |
+| `golem_boss` | `golem_boss.bbmodel` | Boss tipo tanque/gorila: torso ancho y musculoso, cabeza pequeña, hombreras, brazos largos y articulados (hombro→antebrazo→puño), encorvado hacia adelante. Animaciones: `idle`, `walk`, `run`, `attack`, `death`. |
 
 ## Uso
 
@@ -52,7 +52,7 @@ Página estática con Three.js. Controles:
 - Selector de modelo.
 - **Textura on/off** — alterna entre la textura real y el color plano por cubo (útil para revisar
   proporciones/silueta sin que la textura distraiga).
-- **Animación** (selector) — `idle`, `walk`, `attack`, `death` para el golem. Reproduce keyframes
+- **Animación** (selector) — `idle`, `walk`, `run`, `attack`, `death` para el golem. Reproduce keyframes
   reales interpolados en vivo (ver sección Animaciones abajo).
 - **Auto-rotar** — gira el modelo solo, para verlo desde todos los ángulos sin tocar el mouse.
 - Botón de descarga del `.bbmodel` del modelo activo.
@@ -102,6 +102,10 @@ el clip; las que tienen `loop: false` (`attack`, `death`) se reproducen una vez 
   anidados dentro), leve balanceo de brazos. Piernas fijas.
 - `walk` — piernas alternan adelante/atrás, brazos contra-balancean estilo "knuckle-walk", torso
   rebota con cada paso.
+- `run` — no es solo `walk` más rápido: es un "bound" de 2 tiempos tipo orangután/gorila. **Ambos
+  brazos se apoyan juntos** (no alternados) bien adelante, el torso se **columpia** hacia
+  adelante y abajo sobre ellos, y al llegar al punto más alto/vertical **ambas piernas** aterrizan
+  juntas más adelante mientras los brazos se sueltan y vuelan hacia adelante para el próximo apoyo.
 - `attack` — brazos se preparan hacia atrás y golpean hacia adelante/abajo juntos, torso acompaña
   el impulso. No repite (`loop: false`).
 - `death` — el torso cae hacia adelante y se hunde, piernas ceden hacia los costados. No repite.
