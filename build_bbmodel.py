@@ -150,26 +150,28 @@ def build_bbmodel(model_name, root_parts, out_file, animations=None):
         walk(p)
 
     # --- Pass 2: pack + paint the texture atlas ---
-    # scale=2: supersample every cube's UV footprint so small faces (the jaw, for the
-    # painted eyes) get enough pixels to read clearly, not just 1-2px smudges.
-    atlas_img, uv_by_index = paint_atlas(leaf_cubes, atlas_width=260, scale=3)
+    # Kept at native resolution (no supersampling) -- the earlier scale bump made the file
+    # heavier for no real benefit; the eyes just needed correct placement, not more pixels.
+    atlas_img, uv_by_index = paint_atlas(leaf_cubes, atlas_width=128)
     atlas_w, atlas_h = atlas_img.size
 
     # Paint eyes on the jaw's front (south) face, if this model has one tagged "id": "jaw".
+    # rel_box is (x1,y1,x2,y2) as a fraction of the face rect, y growing downward in image
+    # space -- so a LOW y (near 0) is near the jaw's bottom/chin, and a HIGH y (near 1) is
+    # near the jaw's top/brow. The eyes must sit in the upper part of the jaw, clear of the
+    # muzzle cube (which already occupies roughly the bottom 60% of the jaw's height) --
+    # putting them low, as before, placed them right where the mouth is.
     jaw_idx = next((i for i, c in enumerate(leaf_cubes) if c.get("id") == "jaw"), None)
     if jaw_idx is not None:
         rect = uv_by_index[jaw_idx]["south"]
-        # dark sockets (bigger than before -- the previous version was too subtle to read
-        # at normal camera distance), mirrored
-        paint_face_detail(atlas_img, rect, (0.10, 0.12, 0.44, 0.62), (10, 8, 8))
-        paint_face_detail(atlas_img, rect, (0.56, 0.12, 0.90, 0.62), (10, 8, 8))
-        # glowing red-orange irises -- high contrast against the brown/gray skin, and
-        # fits a boss mob better than a naturalistic (and hard-to-see) dark eye
-        paint_face_detail(atlas_img, rect, (0.17, 0.22, 0.37, 0.50), (215, 45, 15))
-        paint_face_detail(atlas_img, rect, (0.63, 0.22, 0.83, 0.50), (215, 45, 15))
-        # small black pupil for a bit of character
-        paint_face_detail(atlas_img, rect, (0.24, 0.30, 0.31, 0.44), (15, 8, 5))
-        paint_face_detail(atlas_img, rect, (0.70, 0.30, 0.77, 0.44), (15, 8, 5))
+        # At native resolution this face is only a few pixels wide/tall, so a layered
+        # socket+iris+pupil doesn't fit (sub-pixel regions just get rounded away). One
+        # solid, high-contrast block per eye is what actually survives at this size --
+        # and a thin dark gap carved out of the middle (painted last, after both eyes)
+        # keeps it reading as two eyes instead of one continuous bar.
+        paint_face_detail(atlas_img, rect, (0.06, 0.58, 0.42, 0.95), (205, 40, 15))
+        paint_face_detail(atlas_img, rect, (0.58, 0.58, 0.94, 0.95), (205, 40, 15))
+        paint_face_detail(atlas_img, rect, (0.42, 0.58, 0.58, 0.95), (60, 50, 42))
 
     buf = BytesIO()
     atlas_img.save(buf, format="PNG")
