@@ -50,6 +50,17 @@ PART_COLORS = {
 }
 
 
+def _normalize_keyframe(kf):
+    """A keyframe is either a Python-authoring tuple (time, {"rotation":[..], "position":[..]})
+    or a JSON-recipe dict {"time":.., "rotation":[..]?, "position":[..]?}. Accept both so
+    hand-written Python animations and recipe.json files use the same conversion functions."""
+    if isinstance(kf, dict):
+        time = kf["time"]
+        data = {k: v for k, v in kf.items() if k in ("rotation", "position")}
+        return time, data
+    return kf[0], kf[1]
+
+
 def build_bbmodel_animations(animations, bone_uuid_by_name):
     """
     Convert our authoring format:
@@ -67,7 +78,8 @@ def build_bbmodel_animations(animations, bone_uuid_by_name):
             if not b_uuid:
                 continue
             keyframes = []
-            for time, data in kfs:
+            for raw_kf in kfs:
+                time, data = _normalize_keyframe(raw_kf)
                 for channel in ("rotation", "position"):
                     if channel in data:
                         x, y, z = data[channel]
@@ -103,10 +115,10 @@ def export_animations_for_viewer(animations):
     for anim_name, anim in animations.items():
         tracks = {}
         for bone_name, kfs in anim["keyframes"].items():
-            tracks[bone_name] = [
-                {"time": t, **{k: v for k, v in data.items() if k in ("rotation", "position")}}
-                for t, data in kfs
-            ]
+            tracks[bone_name] = []
+            for raw_kf in kfs:
+                t, data = _normalize_keyframe(raw_kf)
+                tracks[bone_name].append({"time": t, **data})
         out[anim_name] = {"loop": bool(anim.get("loop")), "length": anim["length"], "tracks": tracks}
     return out
 
@@ -632,5 +644,26 @@ golem_boss_animations = {
 
 
 if __name__ == "__main__":
-    build_bbmodel("demo_mob", demo_mob, "demo_mob.bbmodel")
-    build_bbmodel("golem_boss", golem_boss, "golem_boss.bbmodel", animations=golem_boss_animations)
+    import sys
+
+    def load_recipe(path):
+        """A recipe is JSON: {"name": str, "parts": [...same shape as root_parts...],
+        "animations": {...same shape as e.g. golem_boss_animations, keyframes as
+        {"time":.., "rotation":[..]?, "position":[..]?} dicts instead of tuples...}}
+        See RECIPE_SCHEMA.md for the full format."""
+        with open(path) as f:
+            recipe = json.load(f)
+        if "name" not in recipe or "parts" not in recipe:
+            raise ValueError(f"{path}: a recipe needs at least \"name\" and \"parts\"")
+        return recipe["name"], recipe["parts"], recipe.get("animations")
+
+    if len(sys.argv) > 1:
+        # CLI mode: python build_bbmodel.py path/to/recipe.json [more_recipes.json ...]
+        # Writes <name>.bbmodel / <name>_texture.png / <name>_cubes.json next to this script.
+        for recipe_path in sys.argv[1:]:
+            name, parts, animations = load_recipe(recipe_path)
+            build_bbmodel(name, parts, f"{name}.bbmodel", animations=animations)
+    else:
+        # No args: rebuild the two example models from their Python definitions below.
+        build_bbmodel("demo_mob", demo_mob, "demo_mob.bbmodel")
+        build_bbmodel("golem_boss", golem_boss, "golem_boss.bbmodel", animations=golem_boss_animations)

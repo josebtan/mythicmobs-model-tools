@@ -1,0 +1,15 @@
+[
+  {
+    "id": "golem_boss",
+    "label": "golem_boss",
+    "cubes": "golem_boss_cubes.json",
+    "bbmodel": "golem_boss.bbmodel",
+    "default": true
+  },
+  {
+    "id": "demo_mob",
+    "label": "demo_mob",
+    "cubes": "demo_mob_cubes.json",
+    "bbmodel": "demo_mob.bbmodel"
+  }
+]

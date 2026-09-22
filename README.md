@@ -10,7 +10,14 @@ renderizada para validar proporciones antes de abrirlos en Blockbench.
   definición jerárquica de **partes/huesos** (`name`, `origin`, `cubes`, `children`). Los `children`
   permiten armar cadenas articuladas reales (ej. hombro → antebrazo → puño), cada una como bone
   independiente y rotable en Blockbench/ModelEngine — no solo cubos sueltos. También genera y
-  empaqueta la **textura** de cada modelo (ver `texture_gen.py`).
+  empaqueta la **textura** de cada modelo (ver `texture_gen.py`). Se puede usar como CLI con una
+  **receta JSON** (ver sección de abajo) además de los modelos definidos en Python.
+- `RECIPE_SCHEMA.md` — el formato de receta JSON, documentado para que cualquier persona o agente
+  de IA pueda crear un mob nuevo sin tocar código ni tener el contexto de este repo.
+- `recipes/*.json` — recetas de ejemplo (`demo_mob.json`, `golem_boss.json`), exportadas 1:1 desde
+  las definiciones en Python con `export_recipes.py`.
+- `models.json` — lista de modelos que muestra el visor web. Agregar un mob acá alcanza para que
+  aparezca en el selector, sin tocar `index.html`.
 - `texture_gen.py` — empaqueta cada cubo en un atlas de textura usando el mismo esquema de **box UV**
   que Minecraft (unwrap en cruz de las 6 caras), y lo pinta con Pillow: color base por cubo, sombreado
   simple por cara (más clara arriba, más oscura abajo, como un AO falso) y ruido para textura de piel/roca.
@@ -19,8 +26,9 @@ renderizada para validar proporciones antes de abrirlos en Blockbench.
   planos, no usa la textura real).
   Uso: `python3 render_preview.py <nombre>_cubes.json`
 - `index.html` — visor 3D interactivo (Three.js) publicado vía GitHub Pages, con selector de
-  modelo, textura real aplicada por UV, selector de **animaciones** (keyframes reales), y botón de
-  descarga del `.bbmodel`.
+  modelo, textura real aplicada por UV, selector de **animaciones** (keyframes reales), **editor de
+  textura** integrado (pincel, borrador, cuentagotas, balde, degradado — pintable directo sobre el
+  modelo 3D o sobre el atlas plano), y botón de descarga del `.bbmodel`.
 
 ### Modelos incluidos
 
@@ -29,19 +37,44 @@ renderizada para validar proporciones antes de abrirlos en Blockbench.
 | `demo_mob` | `demo_mob.bbmodel` | Humanoide básico de referencia (cabeza, torso, brazos, piernas). Sin animaciones. |
 | `golem_boss` | `golem_boss.bbmodel` | Boss tipo tanque/gorila: torso ancho y musculoso, cabeza pequeña, hombreras, brazos largos y articulados (hombro→antebrazo→puño), encorvado hacia adelante. Animaciones: `idle`, `walk`, `run`, `attack`, `death`. |
 
+## Crear tu propio mob (para otras personas / otros agentes)
+
+Esta herramienta no está atada a Claude ni a esta conversación — la interfaz es un archivo JSON
+(una "receta"), documentado en **[`RECIPE_SCHEMA.md`](RECIPE_SCHEMA.md)**. Cualquier agente de IA
+(Claude, ChatGPT, lo que sea) puede leer ese documento y generar una receta válida sin más
+contexto que ese archivo.
+
+Flujo para alguien nuevo (persona o agente):
+
+1. Escribir un `recipe.json` siguiendo `RECIPE_SCHEMA.md` (o copiar y adaptar
+   `recipes/golem_boss.json`).
+2. `python3 build_bbmodel.py recipe.json` → genera `.bbmodel` + textura + `*_cubes.json`.
+3. Abrir el `.bbmodel` en Blockbench para texturizar/ajustar a mano, o revisar el resultado con
+   `render_preview.py` / el visor web.
+4. Agregar una entrada en `models.json` → el mob aparece en el visor sin tocar `index.html`.
+5. Commit + push (o un PR, si es un repo compartido con más gente).
+
+No hace falta pedirle nada a un asistente en particular: el generador (`build_bbmodel.py`) y el
+visor (`index.html`) son genéricos — no tienen ningún nombre de hueso ni de modelo hardcodeado.
+Todo lo que hoy es específico del golem (proporciones, animaciones, colores) vive únicamente en
+`recipes/golem_boss.json` / la función `golem_boss` de `build_bbmodel.py`.
+
 ## Uso
 
 ```bash
-pip install matplotlib numpy --break-system-packages
+pip install matplotlib numpy Pillow --break-system-packages
 
-python3 build_bbmodel.py                        # genera *.bbmodel + *_cubes.json para todos los modelos
+python3 build_bbmodel.py                        # genera *.bbmodel + *_cubes.json para los modelos de ejemplo (Python)
+python3 build_bbmodel.py recipes/mi_mob.json     # o generá un mob nuevo desde una receta JSON
 python3 render_preview.py golem_boss_cubes.json  # genera golem_boss_preview_{iso,front,side}.png
 ```
 
-Para crear o modificar un modelo, editá las listas al final de `build_bbmodel.py` (`demo_mob`,
-`golem_boss`, o agregá una nueva) usando la estructura de partes con `origin`/`cubes`/`children`,
-volvé a correr los scripts, revisá las imágenes de preview o la página web, y cuando el modelo se
-vea bien abrí el `.bbmodel` resultante en Blockbench para texturizar y animar del todo.
+Para crear o modificar un modelo tenés dos caminos: escribir una **receta JSON** (recomendado,
+ver sección de arriba — no requiere tocar código) o, si preferís Python, editar las listas al
+final de `build_bbmodel.py` (`demo_mob`, `golem_boss`, o agregar una nueva función) usando la
+misma estructura de partes con `origin`/`cubes`/`children`. En ambos casos: volvé a correr los
+scripts, revisá las imágenes de preview o la página web, y cuando el modelo se vea bien abrí el
+`.bbmodel` resultante en Blockbench para texturizar y animar del todo.
 
 ## Visor 3D (GitHub Pages)
 
@@ -119,6 +152,8 @@ poder iterar sobre las proporciones y la ubicación de las piezas sin trabajar c
 
 ## Roadmap / ideas pendientes
 
+- Validación formal de recetas (JSON Schema) para dar errores claros si un agente genera un
+  `recipe.json` inválido, en vez de un traceback de Python.
 - Interpolación con easing (no solo lineal) para animaciones más "pesadas"/orgánicas.
 - Blending entre animaciones (ej. transición suave `idle` → `walk` en vez de corte seco).
 - Texturas más elaboradas: patrones (rayas, manchas, pelaje), no solo color plano + ruido.

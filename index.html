@@ -916,7 +916,30 @@ window.addEventListener('pointerup', () => {
 });
 
 syncDownloadLink();
-loadModel(picker.value);
+
+function populateModelPicker(manifest) {
+  picker.innerHTML = '';
+  manifest.forEach((m, i) => {
+    const opt = document.createElement('option');
+    opt.value = m.cubes;
+    opt.dataset.bbmodel = m.bbmodel;
+    opt.textContent = m.label || m.id;
+    if (m.default || i === 0) opt.selected = true;
+    picker.appendChild(opt);
+  });
+}
+
+// models.json lets community-contributed mobs show up here just by being listed --
+// no HTML edits needed. If it's missing or fails to load, the <option> tags already
+// in the page (golem_boss/demo_mob) are used as a fallback so the viewer still works.
+fetch('models.json?v=' + Date.now())
+  .then(r => r.ok ? r.json() : Promise.reject())
+  .then(manifest => {
+    populateModelPicker(manifest);
+    syncDownloadLink();
+    loadModel(picker.value);
+  })
+  .catch(() => loadModel(picker.value));
 
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
