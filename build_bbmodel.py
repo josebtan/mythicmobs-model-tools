@@ -407,9 +407,12 @@ golem_boss = [
         ],
     },
     # Legs stay top-level (planted on the ground) -- they should NOT inherit the torso's lean.
+    # Origin is at hip height (y=10, matching the torso's own origin), not the leg's midpoint --
+    # a leg has to pivot from the hip, not its geometric center, or it visibly detaches from the
+    # torso whenever it rotates by more than a few degrees (very noticeable in `death`).
     {
         "name": "left_leg",
-        "origin": [3.5, 5, 0],
+        "origin": [3.5, 10, 0],
         "cubes": [
             {"from": [1, 0, -4], "to": [6, 10, 4], "color": "#83725F"},         # main leg
             {"from": [0.5, 5, 4], "to": [6.5, 8, 5.5], "color": "#55555A"},     # knee guard
@@ -417,7 +420,7 @@ golem_boss = [
     },
     {
         "name": "right_leg",
-        "origin": [-3.5, 5, 0],
+        "origin": [-3.5, 10, 0],
         "cubes": [
             {"from": [-6, 0, -4], "to": [-1, 10, 4], "color": "#83725F"},       # main leg
             {"from": [-6.5, 5, 4], "to": [-0.5, 8, 5.5], "color": "#55555A"},   # knee guard
@@ -485,43 +488,94 @@ golem_boss_animations = {
         },
     },
     "attack": {
-        "loop": False, "length": 0.8,
+        "loop": False, "length": 0.9,
         "keyframes": {
-            # windup (arms pull back/up), then both fists smash forward/down together
+            # big windup (both arms raised high overhead) then a hard two-fisted ground
+            # smash -- "aplastar con los puños" -- with a fast down-swing and a short
+            # settle/rebound instead of a single punch-forward motion.
             "torso": [
-                (0.0, {"rotation": [0, 0, 0]}),
-                (0.25, {"rotation": [-10, 0, 0]}),
-                (0.45, {"rotation": [15, 0, 0]}),
-                (0.8, {"rotation": [0, 0, 0]}),
+                (0.0, {"rotation": [0, 0, 0], "position": [0, 0, 0]}),
+                (0.30, {"rotation": [-15, 0, 0], "position": [0, 0.6, 0]}),   # lean back on windup
+                (0.45, {"rotation": [28, 0, 0], "position": [0, -1.6, 0]}),  # slam impact
+                (0.60, {"rotation": [16, 0, 0], "position": [0, -0.6, 0]}),  # settle
+                (0.90, {"rotation": [0, 0, 0], "position": [0, 0, 0]}),
             ],
             "left_upper_arm": [
                 (0.0, {"rotation": [0, 0, 0]}),
-                (0.25, {"rotation": [-45, 0, 20]}),
-                (0.45, {"rotation": [75, 0, -15]}),
-                (0.8, {"rotation": [0, 0, 0]}),
+                (0.30, {"rotation": [-155, 0, 18]}),   # raised high overhead
+                (0.45, {"rotation": [110, 0, -8]}),    # smashed down hard (fast: only 0.15s)
+                (0.60, {"rotation": [85, 0, 0]}),       # rebound
+                (0.90, {"rotation": [0, 0, 0]}),
             ],
             "right_upper_arm": [
                 (0.0, {"rotation": [0, 0, 0]}),
-                (0.25, {"rotation": [-45, 0, -20]}),
-                (0.45, {"rotation": [75, 0, 15]}),
-                (0.8, {"rotation": [0, 0, 0]}),
+                (0.30, {"rotation": [-155, 0, -18]}),
+                (0.45, {"rotation": [110, 0, 8]}),
+                (0.60, {"rotation": [85, 0, 0]}),
+                (0.90, {"rotation": [0, 0, 0]}),
             ],
         },
     },
     "death": {
         "loop": False, "length": 1.4,
         "keyframes": {
+            # Torso and legs pivot at (roughly) the same hip point and share the exact
+            # same `position` delta at every keyframe, so the hip stays visually attached
+            # throughout the collapse instead of the legs floating away from the torso.
             "torso": [
                 (0.0, {"rotation": [0, 0, 0], "position": [0, 0, 0]}),
-                (1.4, {"rotation": [73, 0, 8], "position": [0, -14, 6]}),
+                (1.4, {"rotation": [70, 0, 8], "position": [0, -3, 2]}),
             ],
             "left_leg": [
-                (0.0, {"rotation": [0, 0, 0]}),
-                (1.4, {"rotation": [-20, 0, 12]}),
+                (0.0, {"rotation": [0, 0, 0], "position": [0, 0, 0]}),
+                (1.4, {"rotation": [-15, 0, 10], "position": [0, -3, 2]}),
             ],
             "right_leg": [
+                (0.0, {"rotation": [0, 0, 0], "position": [0, 0, 0]}),
+                (1.4, {"rotation": [15, 0, -10], "position": [0, -3, 2]}),
+            ],
+            "left_upper_arm": [
                 (0.0, {"rotation": [0, 0, 0]}),
-                (1.4, {"rotation": [20, 0, -12]}),
+                (1.4, {"rotation": [-30, 0, 25]}),
+            ],
+            "right_upper_arm": [
+                (0.0, {"rotation": [0, 0, 0]}),
+                (1.4, {"rotation": [-30, 0, -25]}),
+            ],
+        },
+    },
+    "run": {
+        "loop": True, "length": 0.6,
+        "keyframes": {
+            # Faster, more exaggerated than `walk`, with the arms spending more time swung
+            # forward/down (knuckle-dragging) -- approximating a gorilla's quadrupedal-ish
+            # gallop rather than a plain bipedal jog.
+            "torso": [
+                (0.0, {"rotation": [10, 0, 0], "position": [0, 0, 0]}),
+                (0.15, {"rotation": [-6, 0, 0], "position": [0, 1.3, 0]}),
+                (0.30, {"rotation": [10, 0, 0], "position": [0, 0, 0]}),
+                (0.45, {"rotation": [-6, 0, 0], "position": [0, 1.3, 0]}),
+                (0.60, {"rotation": [10, 0, 0], "position": [0, 0, 0]}),
+            ],
+            "left_leg": [
+                (0.0, {"rotation": [-38, 0, 0]}),
+                (0.30, {"rotation": [38, 0, 0]}),
+                (0.60, {"rotation": [-38, 0, 0]}),
+            ],
+            "right_leg": [
+                (0.0, {"rotation": [38, 0, 0]}),
+                (0.30, {"rotation": [-38, 0, 0]}),
+                (0.60, {"rotation": [38, 0, 0]}),
+            ],
+            "left_upper_arm": [
+                (0.0, {"rotation": [45, 0, 0]}),
+                (0.30, {"rotation": [-28, 0, 0]}),
+                (0.60, {"rotation": [45, 0, 0]}),
+            ],
+            "right_upper_arm": [
+                (0.0, {"rotation": [-28, 0, 0]}),
+                (0.30, {"rotation": [45, 0, 0]}),
+                (0.60, {"rotation": [-28, 0, 0]}),
             ],
         },
     },
