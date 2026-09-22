@@ -43,7 +43,7 @@ PART_COLORS = {
     "left_shoulder": "#5B5B5E", "right_shoulder": "#5B5B5E",
     "left_upper_arm": "#8A7A68", "right_upper_arm": "#8A7A68",
     "left_forearm": "#83725F", "right_forearm": "#83725F",
-    "left_fist": "#4A3C30", "right_fist": "#4A3C30",
+    "left_hand": "#4A3C30", "right_hand": "#4A3C30",
     "left_leg": "#83725F", "right_leg": "#83725F",
     "body": "#8A7A68",
     "left_arm": "#8A7A68", "right_arm": "#8A7A68",
@@ -252,20 +252,24 @@ def arm_chain(side):
             "name": f"{tag}_upper_arm",
             "origin": [s * 10.5, 22, 0],
             "cubes": [
-                {"from": [s * 8, 12, -3.5], "to": [s * 13, 22, 3.5]},        # bicep block
-                {"from": [s * 7.5, 12, -3.7], "to": [s * 13.5, 14.5, 3.7], "color": "#9C8873"},  # bicep bulge
+                {"from": [s * 8.5, 12, -3], "to": [s * 12.5, 22, 3]},          # bicep (slimmer than forearm)
+                {"from": [s * 8, 12, -3.3], "to": [s * 13, 14.5, 3.3], "color": "#9C8873"},  # bicep bulge
             ],
             "children": [{
                 "name": f"{tag}_forearm",
                 "origin": [s * 10.5, 12, 0],
                 "cubes": [
-                    {"from": [s * 7, 4, -3.5], "to": [s * 13, 12, 3.5]},         # forearm (thick, gorilla-like)
+                    {"from": [s * 7, 5, -3.5], "to": [s * 13, 12, 3.5]},         # forearm (thicker than bicep)
                     {"from": [s * 6.5, 9.5, -4], "to": [s * 13.5, 12, 4], "color": "#55555A"},  # bracer/cuff
                 ],
                 "children": [{
-                    "name": f"{tag}_fist",
-                    "origin": [s * 10, 1.5, 0],
-                    "cubes": [{"from": [s * 6, -1, -5.5], "to": [s * 14, 4, 5.5]}],  # big knuckle-dragging fist
+                    "name": f"{tag}_hand",
+                    "origin": [s * 10, 3, 0],
+                    "cubes": [
+                        {"from": [s * 6, 1.5, -5], "to": [s * 13, 4.2, 5]},                       # palm
+                        {"from": [s * 6.5, 4.2, 1], "to": [s * 12.5, 5, 5], "color": "#3E3228"},  # knuckle ridge
+                        {"from": [s * 4.5, 1.8, -1], "to": [s * 6.5, 3.6, 3], "color": "#4A3C30"},  # thumb
+                    ],
                     "children": [],
                 }],
             }],
