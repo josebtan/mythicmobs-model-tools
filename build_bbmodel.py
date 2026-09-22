@@ -152,19 +152,24 @@ def build_bbmodel(model_name, root_parts, out_file, animations=None):
     # --- Pass 2: pack + paint the texture atlas ---
     # scale=2: supersample every cube's UV footprint so small faces (the jaw, for the
     # painted eyes) get enough pixels to read clearly, not just 1-2px smudges.
-    atlas_img, uv_by_index = paint_atlas(leaf_cubes, atlas_width=220, scale=2)
+    atlas_img, uv_by_index = paint_atlas(leaf_cubes, atlas_width=260, scale=3)
     atlas_w, atlas_h = atlas_img.size
 
     # Paint eyes on the jaw's front (south) face, if this model has one tagged "id": "jaw".
     jaw_idx = next((i for i, c in enumerate(leaf_cubes) if c.get("id") == "jaw"), None)
     if jaw_idx is not None:
         rect = uv_by_index[jaw_idx]["south"]
-        # dark eye sockets, slightly inset from center/top of the face, mirrored
-        paint_face_detail(atlas_img, rect, (0.18, 0.18, 0.40, 0.55), (12, 10, 10))
-        paint_face_detail(atlas_img, rect, (0.60, 0.18, 0.82, 0.55), (12, 10, 10))
-        # small lighter pupil highlight so they read as eyes, not just dark smudges
-        paint_face_detail(atlas_img, rect, (0.24, 0.24, 0.32, 0.38), (70, 55, 40))
-        paint_face_detail(atlas_img, rect, (0.66, 0.24, 0.74, 0.38), (70, 55, 40))
+        # dark sockets (bigger than before -- the previous version was too subtle to read
+        # at normal camera distance), mirrored
+        paint_face_detail(atlas_img, rect, (0.10, 0.12, 0.44, 0.62), (10, 8, 8))
+        paint_face_detail(atlas_img, rect, (0.56, 0.12, 0.90, 0.62), (10, 8, 8))
+        # glowing red-orange irises -- high contrast against the brown/gray skin, and
+        # fits a boss mob better than a naturalistic (and hard-to-see) dark eye
+        paint_face_detail(atlas_img, rect, (0.17, 0.22, 0.37, 0.50), (215, 45, 15))
+        paint_face_detail(atlas_img, rect, (0.63, 0.22, 0.83, 0.50), (215, 45, 15))
+        # small black pupil for a bit of character
+        paint_face_detail(atlas_img, rect, (0.24, 0.30, 0.31, 0.44), (15, 8, 5))
+        paint_face_detail(atlas_img, rect, (0.70, 0.30, 0.77, 0.44), (15, 8, 5))
 
     buf = BytesIO()
     atlas_img.save(buf, format="PNG")
