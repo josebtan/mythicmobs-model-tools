@@ -51,10 +51,12 @@ Página estática con Three.js. Controles:
 - Selector de modelo.
 - **Textura on/off** — alterna entre la textura real y el color plano por cubo (útil para revisar
   proporciones/silueta sin que la textura distraiga).
-- **Wireframe** — ve la malla de cubos.
-- **Animación idle** — demo de balanceo simple (ver sección Animaciones abajo).
+- **Animación idle** — respiración: el torso sube/baja levemente (las piernas quedan fijas en el
+  piso), y los brazos —al colgar del torso— acompañan ese movimiento más un leve balanceo propio.
 - **Auto-rotar** — gira el modelo solo, para verlo desde todos los ángulos sin tocar el mouse.
 - Botón de descarga del `.bbmodel` del modelo activo.
+- Panel responsive: en pantallas angostas los paneles pasan a ocupar el ancho completo en vez de
+  superponerse.
 
 El modelo se construye en el visor como una **jerarquía real de huesos** (un `THREE.Group` por
 hueso, anidado igual que en `build_bbmodel.py`), no como una lista plana de cubos — es lo que
@@ -67,11 +69,12 @@ los hijos (ej. brazo colgando del hombro) heredan la rotación de sus padres aut
 armamos la postura encorvada del golem. **Animar es lo mismo, pero variando esa rotación en el
 tiempo en vez de dejarla fija.**
 
-En el visor esto ya corre en vivo: `playIdleAnimation()` en `index.html` mueve `boneGroups['torso']`
-y `boneGroups['left_upper_arm']` / `right_upper_arm` cuadro a cuadro con una función seno — activalo
-con el botón "Animación idle". Es una prueba de concepto escrita a mano, todavía no un sistema de
-keyframes real. Lo que falta para tener animaciones "de verdad" (editables, exportables a
-Blockbench/ModelEngine):
+En el visor esto ya corre en vivo: `playIdleAnimation()` en `index.html` sube/baja
+`boneGroups['torso'].position.y` (respiración) y agrega un leve `rotation.x` a
+`left_upper_arm`/`right_upper_arm` (balanceo) — activalo con el botón "Animación idle". Como la
+cabeza y los brazos están anidados **dentro** del hueso del torso, heredan su movimiento gratis por
+la jerarquía de la escena; las piernas, al ser huesos raíz separados, no se mueven. Es una prueba de
+concepto escrita a mano, todavía no un sistema de keyframes real. Para eso falta:
 
 1. **Definir clips en Python**: en `build_bbmodel.py`, algo como
    `animations = {"idle": {"length": 1.0, "loop": True, "keyframes": {"torso": [(0, [0,0,0]), (0.5, [0,0,3]), (1.0, [0,0,0])]}}}`

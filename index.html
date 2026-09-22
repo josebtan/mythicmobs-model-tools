@@ -17,18 +17,23 @@
   html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
   canvas { display: block; touch-action: none; }
 
-  .panel {
-    position: absolute; z-index: 10; background: var(--panel); backdrop-filter: blur(8px);
-    border: 1px solid var(--border); border-radius: 12px; color: var(--text);
-    box-shadow: 0 4px 20px rgba(0,0,0,0.35);
+  #topBar {
+    position: absolute; top: 0; left: 0; right: 0; z-index: 10;
+    display: flex; flex-wrap: wrap; gap: 8px; padding: 10px; box-sizing: border-box;
   }
 
-  #info { top: 12px; left: 12px; padding: 10px 16px; font-size: 13px; max-width: 60vw; }
+  .panel {
+    background: var(--panel); backdrop-filter: blur(8px);
+    border: 1px solid var(--border); border-radius: 12px; color: var(--text);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.35); box-sizing: border-box;
+  }
+
+  #info { flex: 1 1 240px; padding: 10px 16px; font-size: 13px; }
   #info b { font-size: 14px; }
   #info .hint { color: var(--muted); }
   #info .err { color: #ff8080; display: block; margin-top: 4px; }
 
-  #controls { top: 12px; right: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px; min-width: 200px; }
+  #controls { flex: 0 1 220px; min-width: 180px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
   #controls label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 2px; }
   #controls select {
     width: 100%; background: #232330; color: var(--text); border: 1px solid var(--border);
@@ -47,32 +52,43 @@
   #downloadBtn:hover { background: var(--accent-hover); }
 
   #stats { position: absolute; bottom: 12px; left: 12px; padding: 6px 12px; font-size: 11px; color: var(--muted); }
+
+  @media (max-width: 640px) {
+    #topBar { padding: 8px; gap: 6px; }
+    #info, #controls { flex: 1 1 100%; }
+    #info { padding: 8px 12px; font-size: 12px; }
+    #info b { font-size: 13px; }
+    #controls { padding: 10px; gap: 6px; }
+    .btn { padding: 9px 8px; font-size: 12px; }
+    #stats { bottom: 8px; left: 8px; font-size: 10px; padding: 5px 10px; }
+  }
 </style>
 </head>
 <body>
-<div id="info" class="panel">
-  <b>MythicMobs Model Preview</b><br>
-  <span class="hint">Arrastrá para rotar &middot; scroll para zoom</span>
-  <span id="err" class="err" style="display:none"></span>
-</div>
+<div id="topBar">
+  <div id="info" class="panel">
+    <b>MythicMobs Model Preview</b><br>
+    <span class="hint">Arrastrá para rotar &middot; scroll para zoom</span>
+    <span id="err" class="err" style="display:none"></span>
+  </div>
 
-<div id="controls" class="panel">
-  <div>
-    <label for="modelPicker">Modelo</label>
-    <select id="modelPicker">
-      <option value="demo_mob_cubes.json" data-bbmodel="demo_mob.bbmodel">demo_mob</option>
-      <option value="golem_boss_cubes.json" data-bbmodel="golem_boss.bbmodel" selected>golem_boss</option>
-    </select>
+  <div id="controls" class="panel">
+    <div>
+      <label for="modelPicker">Modelo</label>
+      <select id="modelPicker">
+        <option value="demo_mob_cubes.json" data-bbmodel="demo_mob.bbmodel">demo_mob</option>
+        <option value="golem_boss_cubes.json" data-bbmodel="golem_boss.bbmodel" selected>golem_boss</option>
+      </select>
+    </div>
+    <div class="row">
+      <div id="textureToggle" class="btn active">Textura</div>
+    </div>
+    <div class="row">
+      <div id="animToggle" class="btn">Animación idle</div>
+      <div id="rotateToggle" class="btn">Auto-rotar</div>
+    </div>
+    <a id="downloadBtn" class="btn" download>Descargar .bbmodel</a>
   </div>
-  <div class="row">
-    <div id="textureToggle" class="btn active">Textura</div>
-    <div id="wireToggle" class="btn">Wireframe</div>
-  </div>
-  <div class="row">
-    <div id="animToggle" class="btn">Animación idle</div>
-    <div id="rotateToggle" class="btn">Auto-rotar</div>
-  </div>
-  <a id="downloadBtn" class="btn" download>Descargar .bbmodel</a>
 </div>
 
 <div id="stats" class="panel"></div>
@@ -124,7 +140,6 @@ scene.add(grid);
 let currentGroup = null;
 let boneGroups = {};      // name -> THREE.Group, for animation targeting
 let texturesOn = true;
-let wireframeOn = false;
 
 function clearModel() {
   if (currentGroup) {
@@ -203,6 +218,7 @@ function buildBone(node, sharedTexturedMat, texW, texH) {
       child.origin[1] - node.origin[1],
       child.origin[2] - node.origin[2]
     );
+    childGroup.userData.basePosition = childGroup.position.clone();
     group.add(childGroup);
   });
 
@@ -239,10 +255,9 @@ function buildModel(data) {
   data.skeleton.forEach((rootNode) => {
     const rootGroup = buildBone(rootNode, sharedTexturedMat, texW, texH);
     rootGroup.position.set(rootNode.origin[0], rootNode.origin[1], rootNode.origin[2]);
+    rootGroup.userData.basePosition = rootGroup.position.clone();
     outer.add(rootGroup);
   });
-
-  outer.traverse((o) => { if (o.isMesh) o.material.wireframe = wireframeOn; });
 
   scene.add(outer);
   currentGroup = outer;
@@ -265,7 +280,6 @@ function loadModel(path) {
 const picker = document.getElementById('modelPicker');
 const downloadBtn = document.getElementById('downloadBtn');
 const textureToggle = document.getElementById('textureToggle');
-const wireToggle = document.getElementById('wireToggle');
 const animToggle = document.getElementById('animToggle');
 const rotateToggle = document.getElementById('rotateToggle');
 
@@ -287,13 +301,6 @@ textureToggle.addEventListener('click', () => {
   currentGroup.traverse((o) => {
     if (o.isMesh) o.material = texturesOn ? o.userData.sharedTexturedMat : o.userData.flatMat;
   });
-});
-
-wireToggle.addEventListener('click', () => {
-  wireframeOn = !wireframeOn;
-  wireToggle.classList.toggle('active', wireframeOn);
-  if (!currentGroup) return;
-  currentGroup.traverse((o) => { if (o.isMesh) o.material.wireframe = wireframeOn; });
 });
 
 let animOn = false;
@@ -319,34 +326,36 @@ window.addEventListener('resize', () => {
 
 // ---------------------------------------------------------------------------
 // Demo idle animation: a simple proof that the bone hierarchy above is real --
-// tweening a bone Group's local rotation (on top of its authored base rotation,
+// tweening a bone Group's local transform (on top of its authored base rotation,
 // e.g. the golem's forward hunch) is literally all a keyframe animation system
 // needs to do. This is hand-written sine easing, not a real keyframe track yet
 // (see README roadmap), but it drives the exact same mechanism one would.
+//
+// Only the torso's own position bobs up/down (a breathing motion) -- since head
+// and both arms are nested *inside* the torso bone, they ride along with it for
+// free via the scene graph. Legs are separate root-level bones, so they stay
+// planted on the ground. A small extra rotation on the arms adds a gentle sway
+// on top of that shared motion.
 // ---------------------------------------------------------------------------
 function playIdleAnimation(t) {
-  const breathe = Math.sin(t * 1.6) * 3;      // degrees
-  const armSwing = Math.sin(t * 1.6 + Math.PI / 2) * 4;
-
-  if (boneGroups['torso']) {
-    boneGroups['torso'].rotation.z = THREE.MathUtils.degToRad(breathe * 0.4);
+  const breathe = Math.sin(t * 1.6);           // -1..1
+  const torso = boneGroups['torso'];
+  if (torso && torso.userData.basePosition) {
+    torso.position.y = torso.userData.basePosition.y + breathe * 0.35;
   }
   ['left_upper_arm', 'right_upper_arm'].forEach((name, i) => {
     const g = boneGroups[name];
-    if (g) g.rotation.x = THREE.MathUtils.degToRad(armSwing * (i === 0 ? 1 : -1));
+    if (g) g.rotation.x = THREE.MathUtils.degToRad(breathe * 2.5 * (i === 0 ? 1 : -1));
   });
-  if (currentGroup) {
-    currentGroup.position.y = Math.sin(t * 1.6) * 0.4;
-  }
 }
 
 function resetIdlePose() {
+  const torso = boneGroups['torso'];
+  if (torso && torso.userData.basePosition) torso.position.y = torso.userData.basePosition.y;
   ['left_upper_arm', 'right_upper_arm'].forEach((name) => {
     const g = boneGroups[name];
     if (g) g.rotation.x = 0;
   });
-  if (boneGroups['torso']) boneGroups['torso'].rotation.z = 0;
-  if (currentGroup) currentGroup.position.y = 0;
 }
 
 const clock = new THREE.Clock();
