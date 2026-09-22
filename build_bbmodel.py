@@ -414,10 +414,18 @@ golem_boss = [
                 "name": "head",
                 "origin": [0, 27.5, 0],
                 "cubes": [
-                    {"from": [-3, 29, -3], "to": [3, 32.5, 2.5], "color": "#8A7A68"},     # cranium
+                    # Cranium's front (south, +z) face is flush with the jaw's front face at z=2.8
+                    # -- the two head pieces read as one continuous silhouette from the front.
+                    # Sides (x) are untouched; at the back (north, -z) the cranium still overhangs
+                    # the jaw a bit (-3 vs -2.8), which is intentional (sloped-skull look).
+                    {"from": [-3, 29, -3], "to": [3, 32.5, 2.8], "color": "#8A7A68"},     # cranium
                     {"from": [-2.8, 26, -2.8], "to": [2.8, 29, 2.8], "color": "#6E5C4C", "id": "jaw"},  # jaw block (eyes get painted on its front face)
                     {"from": [-2.8, 26.3, 2.5], "to": [2.8, 27.8, 4.0], "color": "#5C4B3D"},  # muzzle/snout (same width as the jaw)
-                    {"from": [-3, 30.3, 2.3], "to": [3, 31.1, 3.3], "color": "#4A3C30"},  # brow ridge (raised)
+                    # Brow ridge split into independent left/right halves (touching at x=0, same
+                    # overall footprint as the old single cube) so each side can be driven by its
+                    # own keyframes later (raise/furrow) without touching the other.
+                    {"from": [0, 30.3, 2.3], "to": [3, 31.1, 3.3], "color": "#4A3C30", "id": "brow_left"},
+                    {"from": [-3, 30.3, 2.3], "to": [0, 31.1, 3.3], "color": "#4A3C30", "id": "brow_right"},
                     {"from": [3, 28, -1], "to": [4, 30, 1], "color": "#7A6A57"},         # left ear
                     {"from": [-4, 28, -1], "to": [-3, 30, 1], "color": "#7A6A57"},       # right ear
                 ],
