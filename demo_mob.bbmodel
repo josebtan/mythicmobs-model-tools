@@ -97,7 +97,7 @@
         }
       },
       "type": "cube",
-      "uuid": "c8e8dc79-3114-4375-af1b-208f4a48a9b4"
+      "uuid": "abe03154-92e1-449e-b0b1-872d175b27dc"
     },
     {
       "name": "head",
@@ -179,7 +179,7 @@
         }
       },
       "type": "cube",
-      "uuid": "03e5f5bb-e0e3-44aa-b368-ad34c343b95e"
+      "uuid": "e0c88799-69c1-4aea-bb84-9149bc593e9a"
     },
     {
       "name": "left_arm",
@@ -261,7 +261,7 @@
         }
       },
       "type": "cube",
-      "uuid": "a38c0a18-8432-43ff-a5b3-08a27e38f305"
+      "uuid": "b27bee9d-d0fd-4a2a-b057-b3f7f7e8ffe3"
     },
     {
       "name": "right_arm",
@@ -343,7 +343,7 @@
         }
       },
       "type": "cube",
-      "uuid": "413f2638-33ef-4e0e-84f6-3693dc3b03f9"
+      "uuid": "efc08add-f03d-4401-95f8-deb037befd3f"
     },
     {
       "name": "left_leg",
@@ -425,7 +425,7 @@
         }
       },
       "type": "cube",
-      "uuid": "fea8016f-5528-4b22-ac85-42737d7657c5"
+      "uuid": "59f06de9-a896-4feb-8ef4-8e60f7a62bf5"
     },
     {
       "name": "right_leg",
@@ -507,7 +507,7 @@
         }
       },
       "type": "cube",
-      "uuid": "d25118d2-ebb1-488f-b863-06f94e715192"
+      "uuid": "b133f2aa-3be6-4c6e-a78d-d9ccbd3c8af2"
     }
   ],
   "outliner": [
@@ -524,13 +524,13 @@
         0
       ],
       "color": 0,
-      "uuid": "26f06285-13b5-4377-8bb3-c24c87441d9b",
+      "uuid": "2610a2e0-a89b-4f94-ba9c-cedaa230dc03",
       "export": true,
       "isOpen": true,
       "locked": false,
       "visibility": true,
       "children": [
-        "c8e8dc79-3114-4375-af1b-208f4a48a9b4"
+        "abe03154-92e1-449e-b0b1-872d175b27dc"
       ]
     },
     {
@@ -546,13 +546,13 @@
         0
       ],
       "color": 0,
-      "uuid": "fa91a4b2-10b3-4753-af29-4e3a67161281",
+      "uuid": "75c46c93-4949-40f4-a691-96546abdc028",
       "export": true,
       "isOpen": true,
       "locked": false,
       "visibility": true,
       "children": [
-        "03e5f5bb-e0e3-44aa-b368-ad34c343b95e"
+        "e0c88799-69c1-4aea-bb84-9149bc593e9a"
       ]
     },
     {
@@ -568,13 +568,13 @@
         0
       ],
       "color": 0,
-      "uuid": "04ac71a3-c2f7-4808-9cfb-9ec2e8555a11",
+      "uuid": "abe4bcf4-b020-4b91-a353-55f07be78284",
       "export": true,
       "isOpen": true,
       "locked": false,
       "visibility": true,
       "children": [
-        "a38c0a18-8432-43ff-a5b3-08a27e38f305"
+        "b27bee9d-d0fd-4a2a-b057-b3f7f7e8ffe3"
       ]
     },
     {
@@ -590,13 +590,13 @@
         0
       ],
       "color": 0,
-      "uuid": "6e038f39-7f61-4976-a33f-e8efb2431629",
+      "uuid": "1bba4de4-00cc-4e6b-9e9b-d3b3651dda6f",
       "export": true,
       "isOpen": true,
       "locked": false,
       "visibility": true,
       "children": [
-        "413f2638-33ef-4e0e-84f6-3693dc3b03f9"
+        "efc08add-f03d-4401-95f8-deb037befd3f"
       ]
     },
     {
@@ -612,13 +612,13 @@
         0
       ],
       "color": 0,
-      "uuid": "199e1ef4-f25f-49af-8820-4ea0b87a4cd4",
+      "uuid": "2bdfad11-c66c-4a14-bedb-8a257de1c828",
       "export": true,
       "isOpen": true,
       "locked": false,
       "visibility": true,
       "children": [
-        "fea8016f-5528-4b22-ac85-42737d7657c5"
+        "59f06de9-a896-4feb-8ef4-8e60f7a62bf5"
       ]
     },
     {
@@ -634,13 +634,13 @@
         0
       ],
       "color": 0,
-      "uuid": "c74400cd-17a4-4374-85ce-38af7e339edb",
+      "uuid": "82ba3f69-6beb-430e-a5cd-1bb851a7e8ba",
       "export": true,
       "isOpen": true,
       "locked": false,
       "visibility": true,
       "children": [
-        "d25118d2-ebb1-488f-b863-06f94e715192"
+        "b133f2aa-3be6-4c6e-a78d-d9ccbd3c8af2"
       ]
     }
   ],
@@ -667,7 +667,7 @@
       "visible": true,
       "internal": true,
       "saved": true,
-      "uuid": "3b40b6a1-1d7a-454f-a795-f31092eb55a4",
+      "uuid": "0f15c088-1f40-46b0-a81f-1f3648b64b60",
       "relative_path": "",
       "source": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAAAMCAIAAAAlLiI/AAAFjUlEQVR4nN1YTagfVxW/3x8zc2fe+6cheUEfTZRApQtBaIWsKpQgiDsRcSWu3CkuXFRwFXQndNVNKYKbNIi20AakgqWgWPGDEEhMYowhCRrkzf//n5k7M/fTxWlK8pL3EAx50d9u5nLPPfd3zvmdM4O3t0+ge/jhd79mjMEYW2uVUvM8v/bTXywWi7ZttdYppRDC5Rs7aA9cPPc9s7mZnHPOee9fefVn8N45p5T6+ftXHrnrx698I6X0xrnznPM/Xbp9/9KZ73y1aZrXz76Tc/7z5Tv3L53++g+cc7//9ZuEkPU/rz5s9vNf+jZC6MJv36KUdnev7eXzgYPc/9A0DSEkxkgpJYQghBaLxTAMQohpmqSUdV3vY8vU9TwM4zgqrc3mpvceY6yUKsvSObfXLmttjHGe55TSriWMcdd1nHNK6a6lnZ0dSmlKiTH26IsR0jSN1nqfo58GPOB913UYY4yxECKl5L3POc/zTAip69paW1XVvsaYLAo8jojSME0IoRhjztl7vxdNCCFKqTGGEJJz3rUkhJBS9n0vhNi1tFgsIAZ7+8J2dnaccyGE/Xw+aOzmhVIKWTMMg1LKWgvUjONYlmWMcR9bdrXinDPGwjQ55+q6nu/h4QB85Ysvdl2HELp249bGRv+Zkye895/cOlwoGVL23qeUrly/qbU+eWK77/svf+Gzjaneu5RTSimlOzeveO8Pbz07z/Mzx1/QRaWUuvqHd7dOnoLjbv/9Lxjj5tAxWU782PGU8WKxuPS7tx8vff892OlTz+Wc67omhNy49Q9CCMZ4nmcIw7OfOEopjTEyxihGjLFPb29JKTHG0zSdPf/h/bZyziEEjDGT0nvfdR0hBMpIa73r4BCCMSaEUBRFCAGkBo4WSvd9XxSFEALUSWvNGLPWxiiqqgLl4ZzPtk0pEUJCCFBASinOOeecECKEmAZkjOm6Tqqi7/snx+t/DBZjhHJWSh051IzjWBQF5xwhBDHgnJdlaa1lgmutgSxjTErp+998KYRQlmUIQUp58dodrfVqtTLGxBg/9/ynYoxlWWKM27Y9862XwVTf9ymlP15fLpdLSikkO+c8pVSWJUG56zrQOoi0MWYcR4RQjDGEkFKy1h4iJKU0TRPGGCEEZhFC0zRRStu23T5+JOdMCFmtVhhjSqmU8kCpfjSYUsp7v7m52bbtPM/GGMbYNE05Z4yx1hqCEWNUyrRtyzkXQiyXS2iwKSXIdMaYEGK9XnPOx3F0zoHsLJfLuq6bpuEElWWJEGKM5ZzbtoW4AjuQszFGpZVOGWzO8+y9H8cxxsg5l1JSiiH8MUZo8oQQ6ATgJ7ypqmocRyFECAGuFmN8OrsxyTn3fT8MA+c850wp7fteaw11DaSM41hV1TAM0CGklKAPIMfAvrUWJpmUkhCiqirGWIxRa40xhsC0bZtSAjYhJZVSkNSU0mEYPt6+sbGhlGKMAb9SShjDiqLY2NiAE3PO0Jw55zFGSHDO+TzPQghQNs75crmUUpZluU/HPkAQhFDOuSxLpVRRFOv1OoQQQnDOgeAQQoqiyDkXRVHX9Xq9ttaCmMCAlFIClffeA3HDMACtkL8IIUrpOI4YY+ccxhgkGyRCKYUQgqYNAej7HoQFaAVNL4rCOeecg6KJMWKM+77/ODbQAwgh0G/GcYTiBuf7vn86K4DFGCHZIdO11jD4xxittTDGwUu52IRbhRBWqxUh5KipEUIw5k/TVFVV27ZN04AcDcMA5T8MQ4yxaRrvPYyk1tpf/ubyY7nAvxBCCN3960ePf7vwq8di9omB5ZwZY5CYMHcC+1VVwTxHCAF1IoTAaAGDTc75Rz/54EFr7x/MJf6XQeq6xhhLKeGDBT6GodJB+kGOgP15nodhgF8LxpiDdv7/Af8GpgSJtvvXN88AAAAASUVORK5CYII="
     }

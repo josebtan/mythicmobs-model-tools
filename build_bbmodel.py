@@ -484,15 +484,20 @@ golem_boss_animations = {
                 (0.75, {"position": [0, 0.6, 0]}),
                 (1.0, {"position": [0, 0, 0]}),
             ],
+            # Legs share the torso's `position` bob so the hip stays attached (same fix as run/death).
             "left_leg": [
-                (0.0, {"rotation": [-25, 0, 0]}),
-                (0.5, {"rotation": [25, 0, 0]}),
-                (1.0, {"rotation": [-25, 0, 0]}),
+                (0.0, {"rotation": [-25, 0, 0], "position": [0, 0, 0]}),
+                (0.25, {"rotation": [0, 0, 0], "position": [0, 0.6, 0]}),
+                (0.5, {"rotation": [25, 0, 0], "position": [0, 0, 0]}),
+                (0.75, {"rotation": [0, 0, 0], "position": [0, 0.6, 0]}),
+                (1.0, {"rotation": [-25, 0, 0], "position": [0, 0, 0]}),
             ],
             "right_leg": [
-                (0.0, {"rotation": [25, 0, 0]}),
-                (0.5, {"rotation": [-25, 0, 0]}),
-                (1.0, {"rotation": [25, 0, 0]}),
+                (0.0, {"rotation": [25, 0, 0], "position": [0, 0, 0]}),
+                (0.25, {"rotation": [0, 0, 0], "position": [0, 0.6, 0]}),
+                (0.5, {"rotation": [-25, 0, 0], "position": [0, 0, 0]}),
+                (0.75, {"rotation": [0, 0, 0], "position": [0, 0.6, 0]}),
+                (1.0, {"rotation": [25, 0, 0], "position": [0, 0, 0]}),
             ],
             # arms counter-swing opposite their same-side leg, knuckle-walk style
             "left_upper_arm": [
@@ -596,19 +601,22 @@ golem_boss_animations = {
             ],
             # Both legs also move together, roughly opposite phase to the arms: trailing while
             # the arms are planted, swinging forward together to land around the torso's peak.
+            # They share the torso's exact `position` delta at every keyframe (same technique as
+            # the `death` fix) so the hip point stays coincident with the torso instead of the
+            # legs staying rooted while the torso swoops up/down and forward/back above them.
             "left_leg": [
-                (0.00, {"rotation": [-32, 0, 4]}),
-                (0.23, {"rotation": [8, 0, 3]}),
-                (0.46, {"rotation": [42, 0, 2]}),
-                (0.63, {"rotation": [10, 0, 3]}),
-                (0.80, {"rotation": [-32, 0, 4]}),
+                (0.00, {"rotation": [-32, 0, 4], "position": [0, -1.6, 1.6]}),
+                (0.23, {"rotation": [8, 0, 3], "position": [0, 1.0, 0.6]}),
+                (0.46, {"rotation": [42, 0, 2], "position": [0, 1.9, -0.6]}),
+                (0.63, {"rotation": [10, 0, 3], "position": [0, 0.2, 0.6]}),
+                (0.80, {"rotation": [-32, 0, 4], "position": [0, -1.6, 1.6]}),
             ],
             "right_leg": [
-                (0.00, {"rotation": [-32, 0, -4]}),
-                (0.23, {"rotation": [8, 0, -3]}),
-                (0.46, {"rotation": [42, 0, -2]}),
-                (0.63, {"rotation": [10, 0, -3]}),
-                (0.80, {"rotation": [-32, 0, -4]}),
+                (0.00, {"rotation": [-32, 0, -4], "position": [0, -1.6, 1.6]}),
+                (0.23, {"rotation": [8, 0, -3], "position": [0, 1.0, 0.6]}),
+                (0.46, {"rotation": [42, 0, -2], "position": [0, 1.9, -0.6]}),
+                (0.63, {"rotation": [10, 0, -3], "position": [0, 0.2, 0.6]}),
+                (0.80, {"rotation": [-32, 0, -4], "position": [0, -1.6, 1.6]}),
             ],
         },
     },
