@@ -21,7 +21,7 @@ from io import BytesIO
 
 import numpy as np
 
-from texture_gen import paint_atlas, paint_face_detail
+from texture_gen import paint_atlas, paint_face_detail, hex_to_rgb
 
 def uid():
     return str(uuid.uuid4())
@@ -164,14 +164,13 @@ def build_bbmodel(model_name, root_parts, out_file, animations=None):
     jaw_idx = next((i for i, c in enumerate(leaf_cubes) if c.get("id") == "jaw"), None)
     if jaw_idx is not None:
         rect = uv_by_index[jaw_idx]["south"]
-        # At native resolution this face is only a few pixels wide/tall, so a layered
-        # socket+iris+pupil doesn't fit (sub-pixel regions just get rounded away). One
-        # solid, high-contrast block per eye is what actually survives at this size --
-        # and a thin dark gap carved out of the middle (painted last, after both eyes)
-        # keeps it reading as two eyes instead of one continuous bar.
-        paint_face_detail(atlas_img, rect, (0.06, 0.58, 0.42, 0.95), (205, 40, 15))
-        paint_face_detail(atlas_img, rect, (0.58, 0.58, 0.94, 0.95), (205, 40, 15))
-        paint_face_detail(atlas_img, rect, (0.42, 0.58, 0.58, 0.95), (60, 50, 42))
+        skin_color = hex_to_rgb(leaf_cubes[jaw_idx]["color"])
+        # Exact pixel layout for a 6x3px face: two 2x2 black eyes with a 2px-wide gap of
+        # skin color between them, filling the full width (2+2+2=6), sitting in the upper
+        # two rows (near the brow, clear of the muzzle in the bottom row).
+        paint_face_detail(atlas_img, rect, (0.0, 1 / 3, 1 / 3, 1.0), (0, 0, 0))
+        paint_face_detail(atlas_img, rect, (1 / 3, 1 / 3, 2 / 3, 1.0), skin_color)
+        paint_face_detail(atlas_img, rect, (2 / 3, 1 / 3, 1.0, 1.0), (0, 0, 0))
 
     buf = BytesIO()
     atlas_img.save(buf, format="PNG")
@@ -417,7 +416,7 @@ golem_boss = [
                 "cubes": [
                     {"from": [-3, 29, -3], "to": [3, 32.5, 2.5], "color": "#8A7A68"},     # cranium
                     {"from": [-2.8, 26, -2.8], "to": [2.8, 29, 2.8], "color": "#6E5C4C", "id": "jaw"},  # jaw block (eyes get painted on its front face)
-                    {"from": [-1.6, 26.3, 2.5], "to": [1.6, 27.8, 4.0], "color": "#5C4B3D"},  # muzzle/snout (less protruding)
+                    {"from": [-2.8, 26.3, 2.5], "to": [2.8, 27.8, 4.0], "color": "#5C4B3D"},  # muzzle/snout (same width as the jaw)
                     {"from": [-3, 30.3, 2.3], "to": [3, 31.1, 3.3], "color": "#4A3C30"},  # brow ridge (raised)
                     {"from": [3, 28, -1], "to": [4, 30, 1], "color": "#7A6A57"},         # left ear
                     {"from": [-4, 28, -1], "to": [-3, 30, 1], "color": "#7A6A57"},       # right ear
