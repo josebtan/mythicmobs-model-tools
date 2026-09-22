@@ -61,8 +61,31 @@
     #controls { padding: 10px; gap: 6px; }
     .btn { padding: 9px 8px; font-size: 12px; }
     #stats { bottom: 8px; left: 8px; font-size: 10px; padding: 5px 10px; }
-    #paintPanel { left: 8px; right: 8px; top: auto; bottom: 8px; width: auto; max-height: 62vh; }
+    #paintPanel { left: 8px; right: 8px; top: auto; bottom: 8px; width: auto; max-height: 72vh; }
+    /* Only on mobile: the 3D viewport and the flat texture editor take turns,
+       never both on screen -- whichever isn't the active view gets this class. */
+    .mobile-hide { display: none !important; }
+    #viewSwitch { display: flex; }
   }
+
+  /* -- Collapsible panels ------------------------------------------------ */
+  .panel-header {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    cursor: pointer; user-select: none; font-size: 13px; font-weight: 600;
+  }
+  .panel-header .chev { color: var(--muted); font-size: 12px; transition: transform 0.15s; flex: 0 0 auto; }
+  .panel.collapsed .chev { transform: rotate(-90deg); }
+  .panel.collapsed .panel-body { display: none; }
+  #controls .panel-body, #paintPanel .panel-body { display: flex; flex-direction: column; gap: 8px; }
+
+  #viewport3d { position: absolute; inset: 0; }
+
+  /* -- Gradient / view-switch / save controls ---------------------------- */
+  #viewSwitch { display: none; gap: 6px; }
+  #colorRow2 { display: none; align-items: center; gap: 10px; }
+  #paintColor2 { width: 42px; height: 32px; border: none; border-radius: 6px; background: none; padding: 0; cursor: pointer; }
+  #savedHint { display: none; }
+  #savedHint span[data-action] { text-decoration: underline; cursor: pointer; }
 
   /* -- Texture paint editor -------------------------------------------- */
   #paintPanel {
@@ -86,7 +109,7 @@
     background-color: #1c1c22;
   }
   #flatEditor { image-rendering: pixelated; image-rendering: crisp-edges; display: block; cursor: crosshair; }
-  .toolGrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .toolGrid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
   .toolGrid .btn { padding: 8px 4px; font-size: 17px; }
   #colorRow { display: flex; align-items: center; gap: 10px; }
   #paintColor { width: 42px; height: 32px; border: none; border-radius: 6px; background: none; padding: 0; cursor: pointer; }
@@ -108,67 +131,92 @@
   </div>
 
   <div id="controls" class="panel">
-    <div>
-      <label for="modelPicker">Modelo</label>
-      <select id="modelPicker">
-        <option value="demo_mob_cubes.json" data-bbmodel="demo_mob.bbmodel">demo_mob</option>
-        <option value="golem_boss_cubes.json" data-bbmodel="golem_boss.bbmodel" selected>golem_boss</option>
-      </select>
+    <div id="controlsHeader" class="panel-header">
+      <span>Controles</span>
+      <span class="chev">▾</span>
     </div>
-    <div class="row">
-      <div id="textureToggle" class="btn active">Textura</div>
+    <div class="panel-body">
+      <div>
+        <label for="modelPicker">Modelo</label>
+        <select id="modelPicker">
+          <option value="demo_mob_cubes.json" data-bbmodel="demo_mob.bbmodel">demo_mob</option>
+          <option value="golem_boss_cubes.json" data-bbmodel="golem_boss.bbmodel" selected>golem_boss</option>
+        </select>
+      </div>
+      <div class="row">
+        <div id="textureToggle" class="btn active">Textura</div>
+      </div>
+      <div>
+        <label for="animPicker">Animación</label>
+        <select id="animPicker">
+          <option value="">Ninguna (pose base)</option>
+        </select>
+      </div>
+      <div class="row">
+        <div id="rotateToggle" class="btn">Auto-rotar</div>
+      </div>
+      <div class="row">
+        <div id="paintToggle" class="btn">🎨 Editor de textura</div>
+      </div>
+      <a id="downloadBtn" class="btn" download>Descargar .bbmodel</a>
     </div>
-    <div>
-      <label for="animPicker">Animación</label>
-      <select id="animPicker">
-        <option value="">Ninguna (pose base)</option>
-      </select>
-    </div>
-    <div class="row">
-      <div id="rotateToggle" class="btn">Auto-rotar</div>
-    </div>
-    <div class="row">
-      <div id="paintToggle" class="btn">🎨 Editor de textura</div>
-    </div>
-    <a id="downloadBtn" class="btn" download>Descargar .bbmodel</a>
   </div>
 </div>
 
 <div id="paintPanel" class="panel">
-  <h3>Editor de textura</h3>
-  <span class="hint">
-    Click izquierdo y arrastrá para pintar directamente sobre el modelo 3D
-    (click derecho rota la cámara mientras el editor está abierto). También
-    podés pintar acá, sobre el atlas plano, para precisión pixel a pixel.
-  </span>
-  <div id="flatEditorWrap">
-    <canvas id="flatEditor"></canvas>
+  <div id="paintHeader" class="panel-header">
+    <span>🎨 Editor de textura</span>
+    <span class="chev">▾</span>
   </div>
-  <div class="toolGrid">
-    <div class="btn tool-btn active" data-tool="brush" title="Pincel">🖌️</div>
-    <div class="btn tool-btn" data-tool="eraser" title="Borrador (restaura el original)">🧽</div>
-    <div class="btn tool-btn" data-tool="eyedropper" title="Cuentagotas">💧</div>
-    <div class="btn tool-btn" data-tool="bucket" title="Balde de pintura">🪣</div>
+  <div class="panel-body">
+    <span class="hint">
+      Click izquierdo y arrastrá para pintar directamente sobre el modelo 3D
+      (click derecho rota la cámara mientras el editor está abierto). También
+      podés pintar acá, sobre el atlas plano, para precisión pixel a pixel.
+    </span>
+    <div id="viewSwitch" class="row">
+      <div class="btn view-btn active" data-view="3d">Modelo 3D</div>
+      <div class="btn view-btn" data-view="2d">Textura 2D</div>
+    </div>
+    <div id="flatEditorWrap">
+      <canvas id="flatEditor"></canvas>
+    </div>
+    <div class="toolGrid">
+      <div class="btn tool-btn active" data-tool="brush" title="Pincel">🖌️</div>
+      <div class="btn tool-btn" data-tool="eraser" title="Borrador (restaura el original)">🧽</div>
+      <div class="btn tool-btn" data-tool="eyedropper" title="Cuentagotas">💧</div>
+      <div class="btn tool-btn" data-tool="bucket" title="Balde de pintura">🪣</div>
+      <div class="btn tool-btn" data-tool="gradient" title="Degradado: arrastrá para definir dirección y área">🌈</div>
+    </div>
+    <div id="colorRow">
+      <input type="color" id="paintColor" value="#8a7a68">
+      <span class="hint">Color 1</span>
+    </div>
+    <div id="colorRow2">
+      <input type="color" id="paintColor2" value="#e8dcc8">
+      <span class="hint">Color 2 (degradado)</span>
+    </div>
+    <div id="brushSizeRow">
+      <label for="brushSize">Tamaño</label>
+      <input type="range" id="brushSize" min="1" max="12" value="1" step="1">
+      <span id="brushSizeVal">1px</span>
+    </div>
+    <div class="paintActions">
+      <div id="undoBtn" class="btn">↶ Deshacer</div>
+      <div id="redoBtn" class="btn">↷ Rehacer</div>
+    </div>
+    <div class="paintActions">
+      <div id="resetTexBtn" class="btn">Restaurar original</div>
+    </div>
+    <div class="paintActions">
+      <div id="saveModelBtn" class="btn active">💾 Guardar en el modelo</div>
+    </div>
+    <span id="savedHint" class="hint"></span>
+    <a id="downloadTexBtn" class="btn" download>⬇ Descargar textura PNG</a>
   </div>
-  <div id="colorRow">
-    <input type="color" id="paintColor" value="#8a7a68">
-    <span class="hint">Color actual</span>
-  </div>
-  <div id="brushSizeRow">
-    <label for="brushSize">Tamaño</label>
-    <input type="range" id="brushSize" min="1" max="12" value="1" step="1">
-    <span id="brushSizeVal">1px</span>
-  </div>
-  <div class="paintActions">
-    <div id="undoBtn" class="btn">↶ Deshacer</div>
-    <div id="redoBtn" class="btn">↷ Rehacer</div>
-  </div>
-  <div class="paintActions">
-    <div id="resetTexBtn" class="btn">Restaurar original</div>
-  </div>
-  <a id="downloadTexBtn" class="btn" download>⬇ Descargar textura PNG</a>
 </div>
 
+<div id="viewport3d"></div>
 <div id="stats" class="panel"></div>
 
 <script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
@@ -184,7 +232,7 @@ camera.position.set(45, 35, 45);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(window.devicePixelRatio);
-document.body.appendChild(renderer.domElement);
+document.getElementById('viewport3d').appendChild(renderer.domElement);
 
 const controls = new THREE.OrbitControls(camera, renderer.domElement);
 controls.target.set(0, 12, 0);
@@ -426,14 +474,18 @@ rotateToggle.addEventListener('click', () => {
 // ---------------------------------------------------------------------------
 const paint = {
   canvas: null, ctx: null, texture: null, texW: 0, texH: 0,
-  original: null,       // ImageData snapshot of the freshly-generated texture, for the eraser/reset
+  original: null,       // ImageData snapshot the eraser/reset reverts to (the loaded-or-saved baseline)
   tool: 'brush',
   color: '#8a7a68',
+  color2: '#e8dcc8',     // gradient tool's second stop
   size: 1,
   undoStack: [], redoStack: [],
   isDrawing: false,
   lastPx: null,
+  gradStart: null, gradCurrent: null,
 };
+
+function storageKeyForModel(modelValue) { return 'mm-paint-tex:' + modelValue; }
 
 function sizeFlatEditor() {
   if (!paint.canvas) return;
@@ -450,6 +502,9 @@ function updateUndoRedoButtons() {
 }
 
 function setupPaintCanvas(url, texW, texH, mat) {
+  let saved = null;
+  try { saved = localStorage.getItem(storageKeyForModel(picker.value)); } catch (err) { saved = null; }
+
   const img = new Image();
   img.crossOrigin = 'anonymous';
   img.onload = () => {
@@ -471,7 +526,10 @@ function setupPaintCanvas(url, texW, texH, mat) {
     paint.undoStack = [];
     paint.redoStack = [];
     paint.lastPx = null;
+    paint.gradStart = null;
+    paint.gradCurrent = null;
     updateUndoRedoButtons();
+    updateSavedHint();
 
     const tex = new THREE.CanvasTexture(canvas);
     tex.magFilter = THREE.NearestFilter;
@@ -483,8 +541,24 @@ function setupPaintCanvas(url, texW, texH, mat) {
 
     sizeFlatEditor();
   };
+  // A locally-saved edit (if any) loads instead of the server PNG -- same texture
+  // dimensions either way, since it was itself saved from this canvas.
   img.onerror = () => setErr(`No se pudo cargar la textura ${url} para el editor.`);
-  img.src = url + '?v=' + Date.now();
+  img.src = saved || (url + '?v=' + Date.now());
+}
+
+function updateSavedHint() {
+  const hint = document.getElementById('savedHint');
+  let has = false;
+  try { has = !!localStorage.getItem(storageKeyForModel(picker.value)); } catch (err) { has = false; }
+  if (has) {
+    const name = picker.options[picker.selectedIndex].text;
+    hint.innerHTML = `Guardado en este navegador para <b>${name}</b>. ` +
+      `<span data-action="clear-saved">Usar textura original</span>`;
+    hint.style.display = 'block';
+  } else {
+    hint.style.display = 'none';
+  }
 }
 
 function clearPaintCanvas() {
@@ -655,6 +729,14 @@ function handlePointerDown(px, py) {
     paint.texture.needsUpdate = true;
     return false;
   }
+  if (paint.tool === 'gradient') {
+    // Just start tracking the drag here -- the actual fill happens on release
+    // (applyGradient), once we know the full start->end vector.
+    paint.gradStart = [px, py];
+    paint.gradCurrent = [px, py];
+    paint.isDrawing = true;
+    return true;
+  }
   pushUndo();
   paint.isDrawing = true;
   paint.lastPx = null;
@@ -662,9 +744,39 @@ function handlePointerDown(px, py) {
   return true;
 }
 
+// Dispatch a pointermove sample to the right handler for the active tool.
+function handlePointerMove(px, py) {
+  if (paint.tool === 'gradient') { paint.gradCurrent = [px, py]; return; }
+  strokeTo(px, py);
+}
+
+// Fills the bounding box of the start->end drag with a linear gradient that
+// runs along that same vector (color1 at start, color2 at end) -- drag across
+// a face of the model to gradient just that area, same idea as Photoshop's
+// gradient tool but scoped to the dragged box instead of a whole selection.
+function applyGradient(start, end) {
+  if (!paint.ctx) return;
+  const [x0, y0] = start, [x1, y1] = end;
+  if (Math.hypot(x1 - x0, y1 - y0) < 2) return; // a tap, not a drag -- no-op
+  const minX = Math.max(0, Math.min(x0, x1));
+  const minY = Math.max(0, Math.min(y0, y1));
+  const maxX = Math.min(paint.texW, Math.max(x0, x1) + 1);
+  const maxY = Math.min(paint.texH, Math.max(y0, y1) + 1);
+  const w = maxX - minX, h = maxY - minY;
+  if (w <= 0 || h <= 0) return;
+  pushUndo();
+  const grad = paint.ctx.createLinearGradient(x0, y0, x1, y1);
+  grad.addColorStop(0, paint.color);
+  grad.addColorStop(1, paint.color2);
+  paint.ctx.fillStyle = grad;
+  paint.ctx.fillRect(minX, minY, w, h);
+  paint.texture.needsUpdate = true;
+}
+
 function setActiveTool(tool) {
   paint.tool = tool;
   document.querySelectorAll('.tool-btn').forEach(b => b.classList.toggle('active', b.dataset.tool === tool));
+  document.getElementById('colorRow2').style.display = tool === 'gradient' ? 'flex' : 'none';
 }
 
 // -- Toolbar wiring ---------------------------------------------------------
@@ -672,6 +784,27 @@ document.querySelectorAll('.tool-btn').forEach(btn => {
   btn.addEventListener('click', () => setActiveTool(btn.dataset.tool));
 });
 document.getElementById('paintColor').addEventListener('input', (e) => { paint.color = e.target.value; });
+document.getElementById('paintColor2').addEventListener('input', (e) => { paint.color2 = e.target.value; });
+document.getElementById('saveModelBtn').addEventListener('click', () => {
+  if (!paint.canvas || !paint.texture) return;
+  try {
+    localStorage.setItem(storageKeyForModel(picker.value), paint.canvas.toDataURL('image/png'));
+    // The just-saved state becomes the new baseline for the eraser and "Restaurar original".
+    paint.original = paint.ctx.getImageData(0, 0, paint.texW, paint.texH);
+    updateSavedHint();
+    const btn = document.getElementById('saveModelBtn');
+    const prevText = btn.textContent;
+    btn.textContent = '✓ Guardado';
+    setTimeout(() => { btn.textContent = prevText; }, 1500);
+  } catch (err) {
+    setErr('No se pudo guardar en este navegador (¿espacio de almacenamiento lleno?).');
+  }
+});
+document.getElementById('savedHint').addEventListener('click', (e) => {
+  if (e.target.dataset.action !== 'clear-saved') return;
+  localStorage.removeItem(storageKeyForModel(picker.value));
+  loadModel(picker.value); // reload straight from the server's original texture
+});
 const brushSizeInput = document.getElementById('brushSize');
 const brushSizeVal = document.getElementById('brushSizeVal');
 brushSizeInput.addEventListener('input', (e) => {
@@ -700,6 +833,29 @@ window.addEventListener('keydown', (e) => {
   else if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'y' || (e.shiftKey && e.key.toLowerCase() === 'z'))) { e.preventDefault(); redo(); }
 });
 
+// -- Collapsible panels: click the header to fold the body away ------------
+function makeCollapsible(headerId) {
+  document.getElementById(headerId).addEventListener('click', () => {
+    document.getElementById(headerId).closest('.panel').classList.toggle('collapsed');
+  });
+}
+makeCollapsible('controlsHeader');
+makeCollapsible('paintHeader');
+
+// -- Mobile-only 3D/2D view switch: never show the model and the flat atlas
+// at once on a small screen (the .mobile-hide class only takes effect inside
+// the max-width:640px media query, so this is a no-op on desktop).
+const viewport3d = document.getElementById('viewport3d');
+const flatEditorWrapEl = document.getElementById('flatEditorWrap');
+function setPaintView(view) {
+  document.querySelectorAll('.view-btn').forEach(b => b.classList.toggle('active', b.dataset.view === view));
+  viewport3d.classList.toggle('mobile-hide', view === '2d');
+  flatEditorWrapEl.classList.toggle('mobile-hide', view === '3d');
+}
+document.querySelectorAll('.view-btn').forEach(btn => {
+  btn.addEventListener('click', () => setPaintView(btn.dataset.view));
+});
+
 // -- Paint mode toggle: swaps which mouse button rotates the camera --------
 let paintMode = false;
 const paintToggle = document.getElementById('paintToggle');
@@ -710,8 +866,15 @@ paintToggle.addEventListener('click', () => {
   paintMode = !paintMode;
   paintToggle.classList.toggle('active', paintMode);
   paintPanel.classList.toggle('open', paintMode);
+  paintPanel.classList.remove('collapsed');
   controls.mouseButtons = paintMode ? paintModeMouseButtons : defaultMouseButtons;
-  if (paintMode) sizeFlatEditor();
+  if (paintMode) {
+    sizeFlatEditor();
+    setPaintView('3d'); // start on the model; the person can flip to the 2D atlas on mobile
+  } else {
+    viewport3d.classList.remove('mobile-hide');
+    flatEditorWrapEl.classList.remove('mobile-hide');
+  }
 });
 renderer.domElement.addEventListener('contextmenu', (e) => { if (paintMode) e.preventDefault(); });
 
@@ -726,7 +889,7 @@ flatWrap.addEventListener('pointerdown', (e) => {
 flatWrap.addEventListener('pointermove', (e) => {
   if (!paint.isDrawing) return;
   const [px, py] = flatEditorPixel(e);
-  strokeTo(px, py);
+  handlePointerMove(px, py);
 });
 
 // -- Pointer handling: paint directly on the 3D model via raycasting -------
@@ -740,9 +903,17 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
 renderer.domElement.addEventListener('pointermove', (e) => {
   if (!paint.isDrawing) return;
   const hit = raycastPixel(e);
-  if (hit) strokeTo(hit[0], hit[1]);
+  if (hit) handlePointerMove(hit[0], hit[1]);
 });
-window.addEventListener('pointerup', () => { paint.isDrawing = false; paint.lastPx = null; });
+window.addEventListener('pointerup', () => {
+  if (paint.tool === 'gradient' && paint.isDrawing && paint.gradStart) {
+    applyGradient(paint.gradStart, paint.gradCurrent || paint.gradStart);
+  }
+  paint.isDrawing = false;
+  paint.lastPx = null;
+  paint.gradStart = null;
+  paint.gradCurrent = null;
+});
 
 syncDownloadLink();
 loadModel(picker.value);
