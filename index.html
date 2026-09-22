@@ -61,7 +61,42 @@
     #controls { padding: 10px; gap: 6px; }
     .btn { padding: 9px 8px; font-size: 12px; }
     #stats { bottom: 8px; left: 8px; font-size: 10px; padding: 5px 10px; }
+    #paintPanel { left: 8px; right: 8px; top: auto; bottom: 8px; width: auto; max-height: 62vh; }
   }
+
+  /* -- Texture paint editor -------------------------------------------- */
+  #paintPanel {
+    position: absolute; top: 96px; right: 12px; z-index: 10;
+    width: 260px; max-height: calc(100vh - 120px); overflow-y: auto;
+    padding: 12px; display: none; flex-direction: column; gap: 10px;
+  }
+  #paintPanel.open { display: flex; }
+  #paintPanel h3 { margin: 0; font-size: 13px; }
+  #paintPanel .hint { color: var(--muted); font-size: 11px; line-height: 1.4; }
+  #flatEditorWrap {
+    position: relative; width: 100%; overflow: auto; border: 1px solid var(--border);
+    border-radius: 8px; touch-action: none;
+    background-image:
+      linear-gradient(45deg, #2a2a33 25%, transparent 25%),
+      linear-gradient(-45deg, #2a2a33 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, #2a2a33 75%),
+      linear-gradient(-45deg, transparent 75%, #2a2a33 75%);
+    background-size: 12px 12px;
+    background-position: 0 0, 0 6px, 6px -6px, -6px 0;
+    background-color: #1c1c22;
+  }
+  #flatEditor { image-rendering: pixelated; image-rendering: crisp-edges; display: block; cursor: crosshair; }
+  .toolGrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .toolGrid .btn { padding: 8px 4px; font-size: 17px; }
+  #colorRow { display: flex; align-items: center; gap: 10px; }
+  #paintColor { width: 42px; height: 32px; border: none; border-radius: 6px; background: none; padding: 0; cursor: pointer; }
+  #brushSizeRow { display: flex; align-items: center; gap: 8px; }
+  #brushSizeRow label { color: var(--muted); font-size: 12px; white-space: nowrap; }
+  #brushSizeRow input[type=range] { flex: 1; }
+  #brushSizeVal { width: 30px; text-align: right; font-size: 12px; color: var(--muted); }
+  .paintActions { display: flex; gap: 6px; flex-wrap: wrap; }
+  .paintActions .btn { flex: 1 1 auto; font-size: 12px; padding: 7px 6px; }
+  #downloadTexBtn { display: block; text-align: center; text-decoration: none; }
 </style>
 </head>
 <body>
@@ -92,8 +127,46 @@
     <div class="row">
       <div id="rotateToggle" class="btn">Auto-rotar</div>
     </div>
+    <div class="row">
+      <div id="paintToggle" class="btn">🎨 Editor de textura</div>
+    </div>
     <a id="downloadBtn" class="btn" download>Descargar .bbmodel</a>
   </div>
+</div>
+
+<div id="paintPanel" class="panel">
+  <h3>Editor de textura</h3>
+  <span class="hint">
+    Click izquierdo y arrastrá para pintar directamente sobre el modelo 3D
+    (click derecho rota la cámara mientras el editor está abierto). También
+    podés pintar acá, sobre el atlas plano, para precisión pixel a pixel.
+  </span>
+  <div id="flatEditorWrap">
+    <canvas id="flatEditor"></canvas>
+  </div>
+  <div class="toolGrid">
+    <div class="btn tool-btn active" data-tool="brush" title="Pincel">🖌️</div>
+    <div class="btn tool-btn" data-tool="eraser" title="Borrador (restaura el original)">🧽</div>
+    <div class="btn tool-btn" data-tool="eyedropper" title="Cuentagotas">💧</div>
+    <div class="btn tool-btn" data-tool="bucket" title="Balde de pintura">🪣</div>
+  </div>
+  <div id="colorRow">
+    <input type="color" id="paintColor" value="#8a7a68">
+    <span class="hint">Color actual</span>
+  </div>
+  <div id="brushSizeRow">
+    <label for="brushSize">Tamaño</label>
+    <input type="range" id="brushSize" min="1" max="12" value="1" step="1">
+    <span id="brushSizeVal">1px</span>
+  </div>
+  <div class="paintActions">
+    <div id="undoBtn" class="btn">↶ Deshacer</div>
+    <div id="redoBtn" class="btn">↷ Rehacer</div>
+  </div>
+  <div class="paintActions">
+    <div id="resetTexBtn" class="btn">Restaurar original</div>
+  </div>
+  <a id="downloadTexBtn" class="btn" download>⬇ Descargar textura PNG</a>
 </div>
 
 <div id="stats" class="panel"></div>
@@ -252,11 +325,10 @@ function buildModel(data) {
   const [texW, texH] = data.texture_size || [1, 1];
   let sharedTexturedMat = new THREE.MeshLambertMaterial({ color: 0x8a7a68 });
   if (data.texture) {
-    const tex = textureLoader.load(data.texture + '?v=' + Date.now());
-    tex.magFilter = THREE.NearestFilter;
-    tex.minFilter = THREE.NearestFilter;
-    tex.generateMipmaps = false;
-    sharedTexturedMat = new THREE.MeshLambertMaterial({ map: tex });
+    sharedTexturedMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+    setupPaintCanvas(data.texture, texW, texH, sharedTexturedMat);
+  } else {
+    clearPaintCanvas();
   }
 
   data.skeleton.forEach((rootNode) => {
@@ -342,6 +414,336 @@ rotateToggle.addEventListener('click', () => {
   rotateToggle.classList.toggle('active', autoRotate);
 });
 
+// ---------------------------------------------------------------------------
+// Texture paint editor.
+//
+// One <canvas id="flatEditor"> backs both surfaces at once: it's shown
+// directly (CSS-scaled, pixelated) as the flat atlas editor, AND it's the
+// source image for a THREE.CanvasTexture used as sharedTexturedMat.map. So a
+// stroke drawn from either surface (raycast-on-model or click-on-atlas)
+// mutates the exact same pixels -- no separate sync step needed, just
+// `texture.needsUpdate = true` after every draw.
+// ---------------------------------------------------------------------------
+const paint = {
+  canvas: null, ctx: null, texture: null, texW: 0, texH: 0,
+  original: null,       // ImageData snapshot of the freshly-generated texture, for the eraser/reset
+  tool: 'brush',
+  color: '#8a7a68',
+  size: 1,
+  undoStack: [], redoStack: [],
+  isDrawing: false,
+  lastPx: null,
+};
+
+function sizeFlatEditor() {
+  if (!paint.canvas) return;
+  const wrap = document.getElementById('flatEditorWrap');
+  const maxW = wrap.clientWidth || 236;
+  const scale = Math.max(1, Math.floor(maxW / paint.texW));
+  paint.canvas.style.width = (paint.texW * scale) + 'px';
+  paint.canvas.style.height = (paint.texH * scale) + 'px';
+}
+
+function updateUndoRedoButtons() {
+  document.getElementById('undoBtn').style.opacity = paint.undoStack.length ? '1' : '0.4';
+  document.getElementById('redoBtn').style.opacity = paint.redoStack.length ? '1' : '0.4';
+}
+
+function setupPaintCanvas(url, texW, texH, mat) {
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.onload = () => {
+    const w = img.naturalWidth || texW;
+    const h = img.naturalHeight || texH;
+    const canvas = document.getElementById('flatEditor');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+    ctx.clearRect(0, 0, w, h);
+    ctx.drawImage(img, 0, 0, w, h);
+
+    paint.canvas = canvas;
+    paint.ctx = ctx;
+    paint.texW = w;
+    paint.texH = h;
+    paint.original = ctx.getImageData(0, 0, w, h);
+    paint.undoStack = [];
+    paint.redoStack = [];
+    paint.lastPx = null;
+    updateUndoRedoButtons();
+
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.magFilter = THREE.NearestFilter;
+    tex.minFilter = THREE.NearestFilter;
+    tex.generateMipmaps = false;
+    paint.texture = tex;
+    mat.map = tex;
+    mat.needsUpdate = true;
+
+    sizeFlatEditor();
+  };
+  img.onerror = () => setErr(`No se pudo cargar la textura ${url} para el editor.`);
+  img.src = url + '?v=' + Date.now();
+}
+
+function clearPaintCanvas() {
+  paint.canvas = document.getElementById('flatEditor');
+  paint.ctx = paint.canvas.getContext('2d');
+  paint.canvas.width = 64;
+  paint.canvas.height = 64;
+  paint.ctx.fillStyle = '#232330';
+  paint.ctx.fillRect(0, 0, 64, 64);
+  paint.texture = null;
+  paint.original = null;
+  paint.texW = 64;
+  paint.texH = 64;
+  paint.undoStack = [];
+  paint.redoStack = [];
+  updateUndoRedoButtons();
+  sizeFlatEditor();
+}
+
+function clampPixel(x, y) {
+  return [Math.max(0, Math.min(paint.texW - 1, x)), Math.max(0, Math.min(paint.texH - 1, y))];
+}
+
+// Pixel coords from a click on the flat atlas panel.
+function flatEditorPixel(evt) {
+  const canvas = paint.canvas;
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  const x = Math.floor((evt.clientX - rect.left) * scaleX);
+  const y = Math.floor((evt.clientY - rect.top) * scaleY);
+  return clampPixel(x, y);
+}
+
+// Pixel coords from a click on the 3D model: raycast, then convert the hit
+// face's UV back into atlas pixel space using the exact inverse of the V-flip
+// applyBoxUV() used when it built that UV in the first place.
+const paintRaycaster = new THREE.Raycaster();
+const paintNDC = new THREE.Vector2();
+function raycastPixel(evt) {
+  if (!currentGroup || !paint.canvas) return null;
+  const rect = renderer.domElement.getBoundingClientRect();
+  paintNDC.x = ((evt.clientX - rect.left) / rect.width) * 2 - 1;
+  paintNDC.y = -((evt.clientY - rect.top) / rect.height) * 2 + 1;
+  paintRaycaster.setFromCamera(paintNDC, camera);
+  const hits = paintRaycaster.intersectObject(currentGroup, true);
+  const hit = hits.find(h => h.object.isMesh && h.uv);
+  if (!hit) return null;
+  const x = Math.floor(hit.uv.x * paint.texW);
+  const y = Math.floor((1 - hit.uv.y) * paint.texH);
+  return clampPixel(x, y);
+}
+
+function pushUndo() {
+  if (!paint.ctx) return;
+  paint.undoStack.push(paint.ctx.getImageData(0, 0, paint.texW, paint.texH));
+  if (paint.undoStack.length > 30) paint.undoStack.shift();
+  paint.redoStack = [];
+  updateUndoRedoButtons();
+}
+
+function undo() {
+  if (!paint.undoStack.length) return;
+  paint.redoStack.push(paint.ctx.getImageData(0, 0, paint.texW, paint.texH));
+  paint.ctx.putImageData(paint.undoStack.pop(), 0, 0);
+  paint.texture.needsUpdate = true;
+  updateUndoRedoButtons();
+}
+
+function redo() {
+  if (!paint.redoStack.length) return;
+  paint.undoStack.push(paint.ctx.getImageData(0, 0, paint.texW, paint.texH));
+  paint.ctx.putImageData(paint.redoStack.pop(), 0, 0);
+  paint.texture.needsUpdate = true;
+  updateUndoRedoButtons();
+}
+
+function paintSquare(px, py, size, color) {
+  const half = Math.floor(size / 2);
+  paint.ctx.fillStyle = color;
+  paint.ctx.fillRect(px - half, py - half, size, size);
+}
+
+// Eraser restores the original generated texture's pixels rather than going
+// transparent -- more useful for touching up a mistake than punching a hole.
+function eraseSquare(px, py, size) {
+  const half = Math.floor(size / 2);
+  let x0 = Math.max(0, px - half), y0 = Math.max(0, py - half);
+  let x1 = Math.min(paint.texW, px - half + size), y1 = Math.min(paint.texH, py - half + size);
+  const w = x1 - x0, h = y1 - y0;
+  if (w <= 0 || h <= 0) return;
+  const imgData = paint.ctx.createImageData(w, h);
+  for (let yy = 0; yy < h; yy++) {
+    for (let xx = 0; xx < w; xx++) {
+      const srcIdx = ((y0 + yy) * paint.texW + (x0 + xx)) * 4;
+      const dstIdx = (yy * w + xx) * 4;
+      imgData.data.set(paint.original.data.subarray(srcIdx, srcIdx + 4), dstIdx);
+    }
+  }
+  paint.ctx.putImageData(imgData, x0, y0);
+}
+
+function applyTool(px, py) {
+  if (paint.tool === 'brush') paintSquare(px, py, paint.size, paint.color);
+  else if (paint.tool === 'eraser') eraseSquare(px, py, paint.size);
+  paint.texture.needsUpdate = true;
+}
+
+// Bresenham between the last painted pixel and this one, so fast drags don't
+// leave gaps between raycast/pointermove samples.
+function strokeTo(px, py) {
+  if (!paint.lastPx) { applyTool(px, py); paint.lastPx = [px, py]; return; }
+  let [x, y] = paint.lastPx;
+  const dx = Math.abs(px - x), dy = -Math.abs(py - y);
+  const sx = x < px ? 1 : -1, sy = y < py ? 1 : -1;
+  let err = dx + dy;
+  while (true) {
+    applyTool(x, y);
+    if (x === px && y === py) break;
+    const e2 = 2 * err;
+    if (e2 >= dy) { err += dy; x += sx; }
+    if (e2 <= dx) { err += dx; y += sy; }
+  }
+  paint.lastPx = [px, py];
+}
+
+function pickColor(px, py) {
+  const d = paint.ctx.getImageData(px, py, 1, 1).data;
+  const hex = '#' + [d[0], d[1], d[2]].map(v => v.toString(16).padStart(2, '0')).join('');
+  paint.color = hex;
+  document.getElementById('paintColor').value = hex;
+  setActiveTool('brush');
+}
+
+function floodFill(startX, startY, fillColorHex) {
+  const w = paint.texW, h = paint.texH, ctx = paint.ctx;
+  const imgData = ctx.getImageData(0, 0, w, h);
+  const data = imgData.data;
+  const idx = (x, y) => (y * w + x) * 4;
+  const s = idx(startX, startY);
+  const sr = data[s], sg = data[s + 1], sb = data[s + 2], sa = data[s + 3];
+  const fr = parseInt(fillColorHex.slice(1, 3), 16), fg = parseInt(fillColorHex.slice(3, 5), 16), fb = parseInt(fillColorHex.slice(5, 7), 16);
+  if (sr === fr && sg === fg && sb === fb && sa === 255) return;
+  const tol = 24;
+  const matches = (i) => Math.abs(data[i] - sr) <= tol && Math.abs(data[i + 1] - sg) <= tol &&
+    Math.abs(data[i + 2] - sb) <= tol && Math.abs(data[i + 3] - sa) <= tol;
+  const visited = new Uint8Array(w * h);
+  const stack = [[startX, startY]];
+  while (stack.length) {
+    const [x, y] = stack.pop();
+    if (x < 0 || y < 0 || x >= w || y >= h) continue;
+    const v = y * w + x;
+    if (visited[v]) continue;
+    const i = idx(x, y);
+    if (!matches(i)) continue;
+    visited[v] = 1;
+    data[i] = fr; data[i + 1] = fg; data[i + 2] = fb; data[i + 3] = 255;
+    stack.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]);
+  }
+  ctx.putImageData(imgData, 0, 0);
+}
+
+function handlePointerDown(px, py) {
+  if (paint.tool === 'eyedropper') { pickColor(px, py); return false; }
+  if (paint.tool === 'bucket') {
+    pushUndo();
+    floodFill(px, py, paint.color);
+    paint.texture.needsUpdate = true;
+    return false;
+  }
+  pushUndo();
+  paint.isDrawing = true;
+  paint.lastPx = null;
+  strokeTo(px, py);
+  return true;
+}
+
+function setActiveTool(tool) {
+  paint.tool = tool;
+  document.querySelectorAll('.tool-btn').forEach(b => b.classList.toggle('active', b.dataset.tool === tool));
+}
+
+// -- Toolbar wiring ---------------------------------------------------------
+document.querySelectorAll('.tool-btn').forEach(btn => {
+  btn.addEventListener('click', () => setActiveTool(btn.dataset.tool));
+});
+document.getElementById('paintColor').addEventListener('input', (e) => { paint.color = e.target.value; });
+const brushSizeInput = document.getElementById('brushSize');
+const brushSizeVal = document.getElementById('brushSizeVal');
+brushSizeInput.addEventListener('input', (e) => {
+  paint.size = parseInt(e.target.value, 10);
+  brushSizeVal.textContent = paint.size + 'px';
+});
+document.getElementById('undoBtn').addEventListener('click', undo);
+document.getElementById('redoBtn').addEventListener('click', redo);
+document.getElementById('resetTexBtn').addEventListener('click', () => {
+  if (!paint.original) return;
+  pushUndo();
+  paint.ctx.putImageData(paint.original, 0, 0);
+  paint.texture.needsUpdate = true;
+});
+document.getElementById('downloadTexBtn').addEventListener('click', (e) => {
+  if (!paint.canvas || !paint.texture) { e.preventDefault(); return; }
+  const opt = picker.options[picker.selectedIndex];
+  const name = opt.value.replace('_cubes.json', '') + '_texture_edit.png';
+  const a = e.currentTarget;
+  a.href = paint.canvas.toDataURL('image/png');
+  a.download = name;
+});
+window.addEventListener('keydown', (e) => {
+  if (!paintMode) return;
+  if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); }
+  else if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'y' || (e.shiftKey && e.key.toLowerCase() === 'z'))) { e.preventDefault(); redo(); }
+});
+
+// -- Paint mode toggle: swaps which mouse button rotates the camera --------
+let paintMode = false;
+const paintToggle = document.getElementById('paintToggle');
+const paintPanel = document.getElementById('paintPanel');
+const defaultMouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
+const paintModeMouseButtons = { LEFT: null, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE };
+paintToggle.addEventListener('click', () => {
+  paintMode = !paintMode;
+  paintToggle.classList.toggle('active', paintMode);
+  paintPanel.classList.toggle('open', paintMode);
+  controls.mouseButtons = paintMode ? paintModeMouseButtons : defaultMouseButtons;
+  if (paintMode) sizeFlatEditor();
+});
+renderer.domElement.addEventListener('contextmenu', (e) => { if (paintMode) e.preventDefault(); });
+
+// -- Pointer handling: flat atlas panel -------------------------------------
+const flatWrap = document.getElementById('flatEditorWrap');
+flatWrap.addEventListener('pointerdown', (e) => {
+  if (!paint.canvas || !paint.texture) return;
+  e.preventDefault();
+  const [px, py] = flatEditorPixel(e);
+  if (handlePointerDown(px, py)) flatWrap.setPointerCapture(e.pointerId);
+});
+flatWrap.addEventListener('pointermove', (e) => {
+  if (!paint.isDrawing) return;
+  const [px, py] = flatEditorPixel(e);
+  strokeTo(px, py);
+});
+
+// -- Pointer handling: paint directly on the 3D model via raycasting -------
+renderer.domElement.addEventListener('pointerdown', (e) => {
+  if (!paintMode || e.button !== 0 || !paint.canvas || !paint.texture) return;
+  const hit = raycastPixel(e);
+  if (!hit) return;
+  e.preventDefault();
+  if (handlePointerDown(hit[0], hit[1])) renderer.domElement.setPointerCapture(e.pointerId);
+});
+renderer.domElement.addEventListener('pointermove', (e) => {
+  if (!paint.isDrawing) return;
+  const hit = raycastPixel(e);
+  if (hit) strokeTo(hit[0], hit[1]);
+});
+window.addEventListener('pointerup', () => { paint.isDrawing = false; paint.lastPx = null; });
+
 syncDownloadLink();
 loadModel(picker.value);
 
@@ -349,6 +751,7 @@ window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
+  sizeFlatEditor();
 });
 
 // ---------------------------------------------------------------------------
