@@ -62,13 +62,34 @@ def pack_cubes(cube_dims, atlas_width=128):
     return placements, atlas_height
 
 
-def paint_atlas(cubes, atlas_width=128, seed=42):
+def paint_face_detail(img, rect, rel_box, color):
+    """Paint a small flat-color rectangle on top of an already-painted face.
+    rect: (x1,y1,x2,y2) absolute pixel coords of the face (as returned in uv_by_index).
+    rel_box: (x1,y1,x2,y2) in 0..1, relative to that face's own width/height.
+    Used for cheap texture details (eyes, etc.) that don't need their own geometry.
+    """
+    x1, y1, x2, y2 = rect
+    w, h = x2 - x1, y2 - y1
+    rx1, ry1, rx2, ry2 = rel_box
+    px1, py1 = x1 + rx1 * w, y1 + ry1 * h
+    px2, py2 = x1 + rx2 * w, y1 + ry2 * h
+    pixels = img.load()
+    for px in range(int(round(px1)), max(int(round(px1)) + 1, int(round(px2)))):
+        for py in range(int(round(py1)), max(int(round(py1)) + 1, int(round(py2)))):
+            if 0 <= px < img.width and 0 <= py < img.height:
+                pixels[px, py] = color
+
+
+def paint_atlas(cubes, atlas_width=128, seed=42, scale=1):
     """
     cubes: list of dicts with keys w,h,d (ints/floats) and color (#RRGGBB).
+    scale: supersamples every cube's texture footprint by this factor (geometry is
+    unaffected -- this only gives small faces, like the jaw, more pixels to work with
+    for painted details such as eyes).
     Returns (image: PIL.Image, uv_by_index: list of {face: [x1,y1,x2,y2]}).
     """
     rng = random.Random(seed)
-    dims = [(c["w"], c["h"], c["d"]) for c in cubes]
+    dims = [(c["w"] * scale, c["h"] * scale, c["d"] * scale) for c in cubes]
     placements, atlas_height = pack_cubes(dims, atlas_width)
     atlas_height = max(atlas_height, 1)
 

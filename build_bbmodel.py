@@ -21,7 +21,7 @@ from io import BytesIO
 
 import numpy as np
 
-from texture_gen import paint_atlas
+from texture_gen import paint_atlas, paint_face_detail
 
 def uid():
     return str(uuid.uuid4())
@@ -134,6 +134,7 @@ def build_bbmodel(model_name, root_parts, out_file, animations=None):
             world_center = world_origin + world_R @ (local_center - own_origin_rest)
             leaf_cubes.append({
                 "part_name": part["name"],
+                "id": cube.get("id"),
                 "origin": part["origin"],
                 "from": cube["from"],
                 "to": cube["to"],
@@ -149,8 +150,21 @@ def build_bbmodel(model_name, root_parts, out_file, animations=None):
         walk(p)
 
     # --- Pass 2: pack + paint the texture atlas ---
-    atlas_img, uv_by_index = paint_atlas(leaf_cubes, atlas_width=128)
+    # scale=2: supersample every cube's UV footprint so small faces (the jaw, for the
+    # painted eyes) get enough pixels to read clearly, not just 1-2px smudges.
+    atlas_img, uv_by_index = paint_atlas(leaf_cubes, atlas_width=220, scale=2)
     atlas_w, atlas_h = atlas_img.size
+
+    # Paint eyes on the jaw's front (south) face, if this model has one tagged "id": "jaw".
+    jaw_idx = next((i for i, c in enumerate(leaf_cubes) if c.get("id") == "jaw"), None)
+    if jaw_idx is not None:
+        rect = uv_by_index[jaw_idx]["south"]
+        # dark eye sockets, slightly inset from center/top of the face, mirrored
+        paint_face_detail(atlas_img, rect, (0.18, 0.18, 0.40, 0.55), (12, 10, 10))
+        paint_face_detail(atlas_img, rect, (0.60, 0.18, 0.82, 0.55), (12, 10, 10))
+        # small lighter pupil highlight so they read as eyes, not just dark smudges
+        paint_face_detail(atlas_img, rect, (0.24, 0.24, 0.32, 0.38), (70, 55, 40))
+        paint_face_detail(atlas_img, rect, (0.66, 0.24, 0.74, 0.38), (70, 55, 40))
 
     buf = BytesIO()
     atlas_img.save(buf, format="PNG")
@@ -379,8 +393,8 @@ golem_boss = [
             # Torso built as stacked segments of varying width for a gorilla hourglass-ish
             # silhouette: broad chest/shoulders -> tapered waist -> hips flare back out.
             {"from": [-7, 22, -4], "to": [7, 26, 4], "color": "#8A7A68"},        # chest (broadest point)
-            {"from": [1, 22, 4], "to": [6.5, 26, 6.5], "color": "#9C8873"},      # left pectoral
-            {"from": [-6.5, 22, 4], "to": [-1, 26, 6.5], "color": "#9C8873"},    # right pectoral
+            {"from": [1, 22, 4], "to": [6.5, 26, 5.3], "color": "#9C8873"},      # left pectoral
+            {"from": [-6.5, 22, 4], "to": [-1, 26, 5.3], "color": "#9C8873"},    # right pectoral
             {"from": [-5.5, 18, -3.5], "to": [5.5, 22, 3.5], "color": "#83725F"},  # ribs / upper abs
             {"from": [-4, 18, 3.5], "to": [4, 21, 5], "color": "#97846D"},       # abdomen muscle detail
             {"from": [-4, 14, -3], "to": [4, 18, 3], "color": "#6E5F4F"},        # waist (narrowest point)
@@ -395,9 +409,9 @@ golem_boss = [
                 "origin": [0, 27.5, 0],
                 "cubes": [
                     {"from": [-3, 29, -3], "to": [3, 32.5, 2.5], "color": "#8A7A68"},     # cranium
-                    {"from": [-2.8, 26, -2.8], "to": [2.8, 29, 2.8], "color": "#6E5C4C"},  # jaw block
-                    {"from": [-2, 26.3, 2.5], "to": [2, 28, 5.2], "color": "#5C4B3D"},    # muzzle/snout
-                    {"from": [-3, 29.8, 2.3], "to": [3, 30.6, 3.3], "color": "#4A3C30"},  # brow ridge
+                    {"from": [-2.8, 26, -2.8], "to": [2.8, 29, 2.8], "color": "#6E5C4C", "id": "jaw"},  # jaw block (eyes get painted on its front face)
+                    {"from": [-1.6, 26.3, 2.5], "to": [1.6, 27.8, 4.0], "color": "#5C4B3D"},  # muzzle/snout (less protruding)
+                    {"from": [-3, 30.3, 2.3], "to": [3, 31.1, 3.3], "color": "#4A3C30"},  # brow ridge (raised)
                     {"from": [3, 28, -1], "to": [4, 30, 1], "color": "#7A6A57"},         # left ear
                     {"from": [-4, 28, -1], "to": [-3, 30, 1], "color": "#7A6A57"},       # right ear
                 ],
