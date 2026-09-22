@@ -5,40 +5,84 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>MythicMobs Model Preview</title>
 <style>
-  html, body { margin: 0; height: 100%; background: #1e1e24; overflow: hidden; font-family: sans-serif; }
-  #info {
-    position: absolute; top: 12px; left: 12px; color: #eee; z-index: 10;
-    background: rgba(0,0,0,0.45); padding: 8px 14px; border-radius: 8px; font-size: 14px;
+  :root {
+    --bg: #16161c;
+    --panel: rgba(24,24,30,0.82);
+    --border: rgba(255,255,255,0.08);
+    --text: #eaeaef;
+    --muted: #9a9aa5;
+    --accent: #2ea043;
+    --accent-hover: #3fb857;
   }
-  #info b { color: #fff; }
-  #model-select {
-    position: absolute; top: 12px; right: 12px; z-index: 10;
+  html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  canvas { display: block; touch-action: none; }
+
+  .panel {
+    position: absolute; z-index: 10; background: var(--panel); backdrop-filter: blur(8px);
+    border: 1px solid var(--border); border-radius: 12px; color: var(--text);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.35);
   }
-  canvas { display: block; }
+
+  #info { top: 12px; left: 12px; padding: 10px 16px; font-size: 13px; max-width: 60vw; }
+  #info b { font-size: 14px; }
+  #info .hint { color: var(--muted); }
+  #info .err { color: #ff8080; display: block; margin-top: 4px; }
+
+  #controls { top: 12px; right: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px; min-width: 200px; }
+  #controls label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 2px; }
+  #controls select {
+    width: 100%; background: #232330; color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; padding: 6px 8px; font-size: 14px;
+  }
+  .row { display: flex; gap: 8px; align-items: center; }
+  .btn {
+    flex: 1; text-align: center; cursor: pointer; user-select: none;
+    padding: 7px 10px; border-radius: 6px; font-size: 13px; border: 1px solid var(--border);
+    background: #232330; color: var(--text); transition: background 0.15s;
+  }
+  .btn:hover { background: #2c2c3a; }
+  .btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.active:hover { background: var(--accent-hover); }
+  #downloadBtn { display: block; text-decoration: none; background: var(--accent); border-color: var(--accent); }
+  #downloadBtn:hover { background: var(--accent-hover); }
+
+  #stats { position: absolute; bottom: 12px; left: 12px; padding: 6px 12px; font-size: 11px; color: var(--muted); }
 </style>
 </head>
 <body>
-<div id="info">
+<div id="info" class="panel">
   <b>MythicMobs Model Preview</b><br>
-  Click y arrastrá para rotar &middot; scroll para zoom
+  <span class="hint">Arrastrá para rotar &middot; scroll para zoom</span>
+  <span id="err" class="err" style="display:none"></span>
 </div>
-<div id="model-select">
-  <select id="modelPicker">
-    <option value="demo_mob_cubes.json" data-bbmodel="demo_mob.bbmodel">demo_mob</option>
-    <option value="golem_boss_cubes.json" data-bbmodel="golem_boss.bbmodel" selected>golem_boss</option>
-  </select>
-  <a id="downloadBtn" href="golem_boss.bbmodel" download style="
-      display:inline-block; margin-left:8px; padding:6px 12px; background:#2ea043;
-      color:#fff; text-decoration:none; border-radius:6px; font-size:14px;">
-    Descargar .bbmodel
-  </a>
+
+<div id="controls" class="panel">
+  <div>
+    <label for="modelPicker">Modelo</label>
+    <select id="modelPicker">
+      <option value="demo_mob_cubes.json" data-bbmodel="demo_mob.bbmodel">demo_mob</option>
+      <option value="golem_boss_cubes.json" data-bbmodel="golem_boss.bbmodel" selected>golem_boss</option>
+    </select>
+  </div>
+  <div class="row">
+    <div id="textureToggle" class="btn active">Textura</div>
+    <div id="wireToggle" class="btn">Wireframe</div>
+  </div>
+  <div class="row">
+    <div id="animToggle" class="btn">Animación idle</div>
+    <div id="rotateToggle" class="btn">Auto-rotar</div>
+  </div>
+  <a id="downloadBtn" class="btn" download>Descargar .bbmodel</a>
 </div>
+
+<div id="stats" class="panel"></div>
 
 <script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
 <script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script>
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x1e1e24);
+scene.background = new THREE.Color(0x16161c);
+scene.fog = new THREE.Fog(0x16161c, 60, 140);
 
 const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
 camera.position.set(45, 35, 45);
@@ -54,7 +98,6 @@ controls.enableDamping = true;
 controls.dampingFactor = 0.08;
 controls.update();
 
-// Lighting
 scene.add(new THREE.AmbientLight(0xffffff, 0.6));
 const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
 dirLight.position.set(20, 30, 10);
@@ -63,26 +106,35 @@ const dirLight2 = new THREE.DirectionalLight(0xffffff, 0.3);
 dirLight2.position.set(-20, 10, -10);
 scene.add(dirLight2);
 
-// Ground grid (Minecraft-style, 1 unit = 1/16 block)
-const grid = new THREE.GridHelper(32, 16, 0x555566, 0x333340);
+const grid = new THREE.GridHelper(32, 16, 0x555566, 0x2a2a35);
 scene.add(grid);
 
-const axes = new THREE.AxesHelper(4);
-scene.add(axes);
+// ---------------------------------------------------------------------------
+// Model loading: JSON shape is { texture, texture_size, cubes (flat, legacy),
+// skeleton: [ {name, origin, rotation, cubes:[{from,to,color,uv_faces}], children:[...]} ] }
+//
+// `skeleton` is built as a REAL nested THREE.Group hierarchy (one Group per bone,
+// positioned at that bone's origin relative to its parent, with the bone's own
+// rotation applied to the Group). Rotating a Group rotates everything parented under
+// it automatically -- the same mechanism build_bbmodel.py used to bake the golem's
+// forward hunch, except here it's live, so it's also what animation hooks into
+// (see playIdleAnimation below): tween a bone Group's .rotation over time.
+// ---------------------------------------------------------------------------
 
-// New JSON format: { texture: "x.png", texture_size: [W,H], cubes: [{name, from, to, origin, uv_faces}] }
-// uv_faces per cube: { east/west/north/south/up/down: [x1,y1,x2,y2] } in texture pixel coords.
 let currentGroup = null;
+let boneGroups = {};      // name -> THREE.Group, for animation targeting
+let texturesOn = true;
+let wireframeOn = false;
 
 function clearModel() {
   if (currentGroup) {
     scene.remove(currentGroup);
     currentGroup.traverse(o => {
       if (o.geometry) o.geometry.dispose();
-      if (o.material && o.material.map) o.material.map.dispose();
-      if (o.material) o.material.dispose();
+      if (o.userData.flatMat) o.userData.flatMat.dispose();
     });
   }
+  boneGroups = {};
 }
 
 const textureLoader = new THREE.TextureLoader();
@@ -98,8 +150,7 @@ function applyBoxUV(geometry, uvFaces, texW, texH) {
     if (!rect) continue;
     const [x1, y1, x2, y2] = rect;
     const u1 = x1 / texW, u2 = x2 / texW;
-    // Flip V: image Y grows downward, UV V grows upward.
-    const v1 = 1 - y2 / texH, v2 = 1 - y1 / texH;
+    const v1 = 1 - y2 / texH, v2 = 1 - y1 / texH; // flip V: image Y grows down, UV V grows up
     const base = f * 4;
     uvAttr.setXY(base + 0, u1, v1);
     uvAttr.setXY(base + 1, u2, v1);
@@ -109,54 +160,34 @@ function applyBoxUV(geometry, uvFaces, texW, texH) {
   uvAttr.needsUpdate = true;
 }
 
-function buildModel(data) {
-  clearModel();
+function buildBone(node, sharedTexturedMat, texW, texH) {
   const group = new THREE.Group();
+  const rot = node.rotation || [0, 0, 0];
+  group.rotation.set(
+    THREE.MathUtils.degToRad(rot[0]),
+    THREE.MathUtils.degToRad(rot[1]),
+    THREE.MathUtils.degToRad(rot[2])
+  );
+  group.name = node.name;
+  boneGroups[node.name] = group;
 
-  const isTextured = data && !Array.isArray(data) && data.cubes;
-  const cubes = isTextured ? data.cubes : data;
-  const [texW, texH] = isTextured ? data.texture_size : [0, 0];
-
-  let material;
-  if (isTextured && data.texture) {
-    const tex = textureLoader.load(data.texture + '?v=' + Date.now());
-    tex.magFilter = THREE.NearestFilter;
-    tex.minFilter = THREE.NearestFilter;
-    tex.generateMipmaps = false;
-    material = new THREE.MeshLambertMaterial({ map: tex });
-  } else {
-    material = new THREE.MeshLambertMaterial({ color: 0x8a7a68 });
-  }
-
-  cubes.forEach((c) => {
-    const [x0, y0, z0] = c.from;
-    const [x1, y1, z1] = c.to;
+  (node.cubes || []).forEach((c) => {
+    const [x0, y0, z0] = c.from, [x1, y1, z1] = c.to;
     const sx = Math.abs(x1 - x0), sy = Math.abs(y1 - y0), sz = Math.abs(z1 - z0);
+    // position relative to this bone's own origin, since the Group is already there
+    const cx = (x0 + x1) / 2 - node.origin[0];
+    const cy = (y0 + y1) / 2 - node.origin[1];
+    const cz = (z0 + z1) / 2 - node.origin[2];
 
     const geom = new THREE.BoxGeometry(sx, sy, sz);
-    if (isTextured && c.uv_faces) applyBoxUV(geom, c.uv_faces, texW, texH);
+    if (c.uv_faces) applyBoxUV(geom, c.uv_faces, texW, texH);
 
-    const mesh = new THREE.Mesh(geom, material);
+    const flatMat = new THREE.MeshLambertMaterial({ color: new THREE.Color(c.color || '#8a7a68') });
 
-    if (c.world_center && c.world_R) {
-      // world_R is a 3x3 rotation matrix (row-major) baked by build_bbmodel.py from the
-      // part hierarchy's `rotation` fields (e.g. the golem's forward hunch), composed
-      // down from parent bones -- same mechanism an animation would use, just static here.
-      const R = c.world_R;
-      const m4 = new THREE.Matrix4().set(
-        R[0][0], R[0][1], R[0][2], 0,
-        R[1][0], R[1][1], R[1][2], 0,
-        R[2][0], R[2][1], R[2][2], 0,
-        0, 0, 0, 1
-      );
-      mesh.quaternion.setFromRotationMatrix(m4);
-      mesh.position.set(c.world_center[0], c.world_center[1], c.world_center[2]);
-    } else {
-      const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, cz = (z0 + z1) / 2;
-      mesh.position.set(cx, cy, cz);
-    }
-
-    mesh.name = c.name || 'cube';
+    const mesh = new THREE.Mesh(geom, texturesOn ? sharedTexturedMat : flatMat);
+    mesh.userData.flatMat = flatMat;
+    mesh.userData.sharedTexturedMat = sharedTexturedMat;
+    mesh.position.set(cx, cy, cz);
 
     const edges = new THREE.EdgesGeometry(geom);
     const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x000000, opacity: 0.25, transparent: true }));
@@ -165,24 +196,78 @@ function buildModel(data) {
     group.add(mesh);
   });
 
-  scene.add(group);
-  currentGroup = group;
+  (node.children || []).forEach((child) => {
+    const childGroup = buildBone(child, sharedTexturedMat, texW, texH);
+    childGroup.position.set(
+      child.origin[0] - node.origin[0],
+      child.origin[1] - node.origin[1],
+      child.origin[2] - node.origin[2]
+    );
+    group.add(childGroup);
+  });
+
+  return group;
+}
+
+function setErr(msg) {
+  const el = document.getElementById('err');
+  if (!msg) { el.style.display = 'none'; el.textContent = ''; return; }
+  el.style.display = 'block';
+  el.textContent = msg;
+}
+
+function buildModel(data) {
+  clearModel();
+  setErr('');
+  const outer = new THREE.Group();
+
+  if (!data.skeleton) {
+    setErr('Este modelo no tiene esqueleto (formato viejo).');
+    return;
+  }
+
+  const [texW, texH] = data.texture_size || [1, 1];
+  let sharedTexturedMat = new THREE.MeshLambertMaterial({ color: 0x8a7a68 });
+  if (data.texture) {
+    const tex = textureLoader.load(data.texture + '?v=' + Date.now());
+    tex.magFilter = THREE.NearestFilter;
+    tex.minFilter = THREE.NearestFilter;
+    tex.generateMipmaps = false;
+    sharedTexturedMat = new THREE.MeshLambertMaterial({ map: tex });
+  }
+
+  data.skeleton.forEach((rootNode) => {
+    const rootGroup = buildBone(rootNode, sharedTexturedMat, texW, texH);
+    rootGroup.position.set(rootNode.origin[0], rootNode.origin[1], rootNode.origin[2]);
+    outer.add(rootGroup);
+  });
+
+  outer.traverse((o) => { if (o.isMesh) o.material.wireframe = wireframeOn; });
+
+  scene.add(outer);
+  currentGroup = outer;
+
+  document.getElementById('stats').textContent =
+    `${Object.keys(boneGroups).length} huesos · ${data.cubes ? data.cubes.length : '?'} cubos`;
 }
 
 function loadModel(path) {
-  // Cache-bust: avoid the browser serving a stale cached copy of the JSON
-  // after we push updates to the model data.
   const url = path + (path.includes('?') ? '&' : '?') + 'v=' + Date.now();
   fetch(url)
     .then(r => r.json())
     .then(buildModel)
-    .catch(err => {
-      document.getElementById('info').innerHTML += `<br><span style="color:#ff8080">Error cargando ${path}: ${err}</span>`;
-    });
+    .catch(err => setErr(`Error cargando ${path}: ${err}`));
 }
 
+// ---------------------------------------------------------------------------
+// UI wiring
+// ---------------------------------------------------------------------------
 const picker = document.getElementById('modelPicker');
 const downloadBtn = document.getElementById('downloadBtn');
+const textureToggle = document.getElementById('textureToggle');
+const wireToggle = document.getElementById('wireToggle');
+const animToggle = document.getElementById('animToggle');
+const rotateToggle = document.getElementById('rotateToggle');
 
 function syncDownloadLink() {
   const opt = picker.options[picker.selectedIndex];
@@ -195,6 +280,34 @@ picker.addEventListener('change', (e) => {
   syncDownloadLink();
 });
 
+textureToggle.addEventListener('click', () => {
+  texturesOn = !texturesOn;
+  textureToggle.classList.toggle('active', texturesOn);
+  if (!currentGroup) return;
+  currentGroup.traverse((o) => {
+    if (o.isMesh) o.material = texturesOn ? o.userData.sharedTexturedMat : o.userData.flatMat;
+  });
+});
+
+wireToggle.addEventListener('click', () => {
+  wireframeOn = !wireframeOn;
+  wireToggle.classList.toggle('active', wireframeOn);
+  if (!currentGroup) return;
+  currentGroup.traverse((o) => { if (o.isMesh) o.material.wireframe = wireframeOn; });
+});
+
+let animOn = false;
+animToggle.addEventListener('click', () => {
+  animOn = !animOn;
+  animToggle.classList.toggle('active', animOn);
+});
+
+let autoRotate = false;
+rotateToggle.addEventListener('click', () => {
+  autoRotate = !autoRotate;
+  rotateToggle.classList.toggle('active', autoRotate);
+});
+
 syncDownloadLink();
 loadModel(picker.value);
 
@@ -204,9 +317,45 @@ window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
+// ---------------------------------------------------------------------------
+// Demo idle animation: a simple proof that the bone hierarchy above is real --
+// tweening a bone Group's local rotation (on top of its authored base rotation,
+// e.g. the golem's forward hunch) is literally all a keyframe animation system
+// needs to do. This is hand-written sine easing, not a real keyframe track yet
+// (see README roadmap), but it drives the exact same mechanism one would.
+// ---------------------------------------------------------------------------
+function playIdleAnimation(t) {
+  const breathe = Math.sin(t * 1.6) * 3;      // degrees
+  const armSwing = Math.sin(t * 1.6 + Math.PI / 2) * 4;
+
+  if (boneGroups['torso']) {
+    boneGroups['torso'].rotation.z = THREE.MathUtils.degToRad(breathe * 0.4);
+  }
+  ['left_upper_arm', 'right_upper_arm'].forEach((name, i) => {
+    const g = boneGroups[name];
+    if (g) g.rotation.x = THREE.MathUtils.degToRad(armSwing * (i === 0 ? 1 : -1));
+  });
+  if (currentGroup) {
+    currentGroup.position.y = Math.sin(t * 1.6) * 0.4;
+  }
+}
+
+function resetIdlePose() {
+  ['left_upper_arm', 'right_upper_arm'].forEach((name) => {
+    const g = boneGroups[name];
+    if (g) g.rotation.x = 0;
+  });
+  if (boneGroups['torso']) boneGroups['torso'].rotation.z = 0;
+  if (currentGroup) currentGroup.position.y = 0;
+}
+
+const clock = new THREE.Clock();
 function animate() {
   requestAnimationFrame(animate);
   controls.update();
+  if (autoRotate && currentGroup) currentGroup.rotation.y += 0.006;
+  if (animOn) playIdleAnimation(clock.getElapsedTime());
+  else resetIdlePose();
   renderer.render(scene, camera);
 }
 animate();

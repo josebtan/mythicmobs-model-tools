@@ -110,6 +110,7 @@ def build_bbmodel(model_name, root_parts, out_file):
 
     def build_group(part):
         cube_uuids = []
+        skeleton_cubes = []
         n = len(part.get("cubes", []))
         for i, cube in enumerate(part.get("cubes", [])):
             idx = cube_cursor[0]
@@ -140,10 +141,21 @@ def build_bbmodel(model_name, root_parts, out_file):
                 "world_center": leaf["world_center"],
                 "world_R": leaf["world_R"],
             })
+            skeleton_cubes.append({
+                "from": cube["from"],
+                "to": cube["to"],
+                "color": leaf["color"],
+                "uv_faces": uv_rects,
+            })
 
-        child_groups = [build_group(child) for child in part.get("children", [])]
+        child_groups = []
+        child_skeletons = []
+        for child in part.get("children", []):
+            g, s = build_group(child)
+            child_groups.append(g)
+            child_skeletons.append(s)
 
-        return {
+        outliner_group = {
             "name": part["name"],
             "origin": part["origin"],
             "rotation": part.get("rotation", [0, 0, 0]),
@@ -155,8 +167,21 @@ def build_bbmodel(model_name, root_parts, out_file):
             "visibility": True,
             "children": cube_uuids + child_groups,
         }
+        skeleton_node = {
+            "name": part["name"],
+            "origin": part["origin"],
+            "rotation": part.get("rotation", [0, 0, 0]),
+            "cubes": skeleton_cubes,
+            "children": child_skeletons,
+        }
+        return outliner_group, skeleton_node
 
-    outliner = [build_group(p) for p in root_parts]
+    outliner = []
+    skeleton = []
+    for p in root_parts:
+        g, s = build_group(p)
+        outliner.append(g)
+        skeleton.append(s)
 
     texture_uuid = uid()
     bbmodel = {
@@ -208,6 +233,7 @@ def build_bbmodel(model_name, root_parts, out_file):
             "texture": texture_file.split("/")[-1],
             "texture_size": [atlas_w, atlas_h],
             "cubes": flat_cubes,
+            "skeleton": skeleton,
         }, f)
 
     print(f"Wrote {out_file} ({len(elements)} cubes), {texture_file} ({atlas_w}x{atlas_h}), {cubes_file}")
