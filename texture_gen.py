@@ -42,20 +42,32 @@ def footprint(w, h, d):
     return (2 * d + 2 * w, d + h)
 
 
-def pack_cubes(cube_dims, atlas_width=128):
-    """cube_dims: list of (w,h,d). Returns (list of (u,v) top-left placements, atlas_height)."""
+def pack_cubes(cube_dims, atlas_width=128, padding=1):
+    """cube_dims: list of (w,h,d). Returns (list of (u,v) top-left placements, same
+    order as cube_dims, atlas_height).
+
+    Cubes are packed tallest-footprint-first (classic shelf-packing heuristic)
+    instead of left-to-right in whatever order the skeleton happens to list them --
+    that's what made the old atlas look like a random dump: a tiny brow cube next
+    to a huge torso, wasting a full row on mostly-empty space. Packing by height
+    groups similarly-sized parts into tidy rows. `padding` leaves a gap between
+    neighboring footprints so each cube's six faces read as one distinct region
+    instead of bleeding into its neighbor's.
+    """
+    order = sorted(range(len(cube_dims)), key=lambda i: -footprint(*cube_dims[i])[1])
     x = 0
     y = 0
     row_h = 0
-    placements = []
-    for (w, h, d) in cube_dims:
+    placements = [None] * len(cube_dims)
+    for i in order:
+        w, h, d = cube_dims[i]
         fw, fh = footprint(w, h, d)
-        fw, fh = int(round(fw)), int(round(fh))
+        fw, fh = int(round(fw)) + padding, int(round(fh)) + padding
         if x + fw > atlas_width and x > 0:
             x = 0
             y += row_h
             row_h = 0
-        placements.append((x, y))
+        placements[i] = (x, y)
         x += fw
         row_h = max(row_h, fh)
     atlas_height = y + row_h

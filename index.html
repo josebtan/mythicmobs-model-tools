@@ -28,10 +28,9 @@
     box-shadow: 0 4px 20px rgba(0,0,0,0.35); box-sizing: border-box;
   }
 
-  #info { flex: 1 1 240px; padding: 10px 16px; font-size: 13px; }
-  #info b { font-size: 14px; }
-  #info .hint { color: var(--muted); }
-  #info .err { color: #ff8080; display: block; margin-top: 4px; }
+  #errBanner {
+    flex: 1 1 240px; padding: 8px 14px; font-size: 12px; color: #ff8080; display: none;
+  }
 
   #controls { flex: 0 1 220px; min-width: 180px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
   #controls label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 2px; }
@@ -55,17 +54,12 @@
 
   @media (max-width: 640px) {
     #topBar { padding: 8px; gap: 6px; }
-    #info, #controls { flex: 1 1 100%; }
-    #info { padding: 8px 12px; font-size: 12px; }
-    #info b { font-size: 13px; }
-    #controls { padding: 10px; gap: 6px; }
+    #controls { flex: 1 1 100%; padding: 10px; gap: 6px; }
     .btn { padding: 9px 8px; font-size: 12px; }
     #stats { bottom: 8px; left: 8px; font-size: 10px; padding: 5px 10px; }
-    #paintPanel { left: 8px; right: 8px; top: auto; bottom: 8px; width: auto; max-height: 72vh; }
-    /* Only on mobile: the 3D viewport and the flat texture editor take turns,
-       never both on screen -- whichever isn't the active view gets this class. */
-    .mobile-hide { display: none !important; }
-    #viewSwitch { display: flex; }
+    #paintPanel, #treePanel { left: 8px; right: 8px; width: auto; }
+    #paintPanel { top: auto; bottom: 8px; max-height: 55vh; }
+    #treePanel { top: 96px; max-height: 40vh; }
   }
 
   /* -- Collapsible panels ------------------------------------------------ */
@@ -75,40 +69,53 @@
   }
   .panel-header .chev { color: var(--muted); font-size: 12px; transition: transform 0.15s; flex: 0 0 auto; }
   .panel.collapsed .chev { transform: rotate(-90deg); }
-  .panel.collapsed .panel-body { display: none; }
-  #controls .panel-body, #paintPanel .panel-body { display: flex; flex-direction: column; gap: 8px; }
+  #controls .panel-body, #paintPanel .panel-body, #treePanel .panel-body {
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  /* Needs !important: without it, "#controls .panel-body { display:flex }" above
+     (an ID selector) outranks this class-only rule and the collapse never visibly
+     does anything, even though the class toggles fine in devtools. */
+  .panel.collapsed .panel-body { display: none !important; }
 
-  #viewport3d { position: absolute; inset: 0; }
+  /* Standalone texture-editor toggle -- deliberately its own floating chip, not
+     nested inside "Controles", since it opens a whole different editing mode. */
+  #paintToggle.panel {
+    padding: 10px 14px; cursor: pointer; user-select: none; font-size: 13px; font-weight: 600;
+  }
+  #paintToggle.panel.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  /* -- 3D / 2D work areas: full-screen, mutually exclusive ---------------- */
+  #viewport3d, #viewport2d { position: absolute; inset: 0; }
+  #viewport3d.hidden { display: none; }
+  #viewport2d {
+    display: none; align-items: center; justify-content: center; overflow: auto;
+    background-image:
+      linear-gradient(45deg, #202028 25%, transparent 25%),
+      linear-gradient(-45deg, #202028 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, #202028 75%),
+      linear-gradient(-45deg, transparent 75%, #202028 75%);
+    background-size: 16px 16px;
+    background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+    background-color: var(--bg);
+  }
+  #viewport2d.open { display: flex; }
+  #flatEditor { image-rendering: pixelated; image-rendering: crisp-edges; display: block; cursor: crosshair; }
 
   /* -- Gradient / view-switch / save controls ---------------------------- */
-  #viewSwitch { display: none; gap: 6px; }
+  #viewSwitch { display: flex; gap: 6px; }
   #colorRow2 { display: none; align-items: center; gap: 10px; }
   #paintColor2 { width: 42px; height: 32px; border: none; border-radius: 6px; background: none; padding: 0; cursor: pointer; }
   #savedHint { display: none; }
   #savedHint span[data-action] { text-decoration: underline; cursor: pointer; }
 
-  /* -- Texture paint editor -------------------------------------------- */
+  /* -- Texture paint editor toolbar (floats over whichever view is active) - */
   #paintPanel {
     position: absolute; top: 96px; right: 12px; z-index: 10;
     width: 260px; max-height: calc(100vh - 120px); overflow-y: auto;
     padding: 12px; display: none; flex-direction: column; gap: 10px;
   }
   #paintPanel.open { display: flex; }
-  #paintPanel h3 { margin: 0; font-size: 13px; }
   #paintPanel .hint { color: var(--muted); font-size: 11px; line-height: 1.4; }
-  #flatEditorWrap {
-    position: relative; width: 100%; overflow: auto; border: 1px solid var(--border);
-    border-radius: 8px; touch-action: none;
-    background-image:
-      linear-gradient(45deg, #2a2a33 25%, transparent 25%),
-      linear-gradient(-45deg, #2a2a33 25%, transparent 25%),
-      linear-gradient(45deg, transparent 75%, #2a2a33 75%),
-      linear-gradient(-45deg, transparent 75%, #2a2a33 75%);
-    background-size: 12px 12px;
-    background-position: 0 0, 0 6px, 6px -6px, -6px 0;
-    background-color: #1c1c22;
-  }
-  #flatEditor { image-rendering: pixelated; image-rendering: crisp-edges; display: block; cursor: crosshair; }
   .toolGrid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
   .toolGrid .btn { padding: 8px 4px; font-size: 17px; }
   #colorRow { display: flex; align-items: center; gap: 10px; }
@@ -120,16 +127,24 @@
   .paintActions { display: flex; gap: 6px; flex-wrap: wrap; }
   .paintActions .btn { flex: 1 1 auto; font-size: 12px; padding: 7px 6px; }
   #downloadTexBtn { display: block; text-align: center; text-decoration: none; }
+
+  /* -- Model composition tree --------------------------------------------- */
+  #treePanel {
+    position: absolute; top: 96px; left: 12px; z-index: 10;
+    width: 220px; max-height: calc(100vh - 120px); overflow-y: auto;
+    padding: 12px;
+  }
+  #treeRoot { font-size: 12px; }
+  #treeRoot ul { list-style: none; margin: 0; padding-left: 16px; }
+  #treeRoot > ul { padding-left: 0; }
+  #treeRoot li { margin: 2px 0; }
+  .tree-row { display: flex; align-items: center; gap: 6px; }
+  .tree-row label { cursor: pointer; user-select: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tree-row input[type=checkbox] { flex: 0 0 auto; accent-color: var(--accent); cursor: pointer; }
 </style>
 </head>
 <body>
 <div id="topBar">
-  <div id="info" class="panel">
-    <b>MythicMobs Model Preview</b><br>
-    <span class="hint">Arrastrá para rotar &middot; scroll para zoom</span>
-    <span id="err" class="err" style="display:none"></span>
-  </div>
-
   <div id="controls" class="panel">
     <div id="controlsHeader" class="panel-header">
       <span>Controles</span>
@@ -155,11 +170,25 @@
       <div class="row">
         <div id="rotateToggle" class="btn">Auto-rotar</div>
       </div>
-      <div class="row">
-        <div id="paintToggle" class="btn">🎨 Editor de textura</div>
-      </div>
       <a id="downloadBtn" class="btn" download>Descargar .bbmodel</a>
     </div>
+  </div>
+
+  <!-- Deliberately separate from #controls: this opens a whole different editing
+       mode (texture painting), not just another preview/animation setting. -->
+  <div id="paintToggle" class="panel">🎨 Editor de textura</div>
+
+  <div id="errBanner" class="panel"></div>
+</div>
+
+<div id="treePanel" class="panel">
+  <div id="treeHeader" class="panel-header">
+    <span>🧬 Partes del modelo</span>
+    <span class="chev">▾</span>
+  </div>
+  <div class="panel-body">
+    <span class="hint">Tocá para mostrar/ocultar cada parte.</span>
+    <div id="treeRoot"></div>
   </div>
 </div>
 
@@ -170,16 +199,13 @@
   </div>
   <div class="panel-body">
     <span class="hint">
-      Click izquierdo y arrastrá para pintar directamente sobre el modelo 3D
-      (click derecho rota la cámara mientras el editor está abierto). También
-      podés pintar acá, sobre el atlas plano, para precisión pixel a pixel.
+      Click izquierdo y arrastrá para pintar directamente sobre el modelo 3D o,
+      en la vista Textura 2D, sobre el atlas (click derecho rota la cámara
+      mientras el editor está abierto). Solo se pinta dentro de las zonas UV.
     </span>
     <div id="viewSwitch" class="row">
       <div class="btn view-btn active" data-view="3d">Modelo 3D</div>
       <div class="btn view-btn" data-view="2d">Textura 2D</div>
-    </div>
-    <div id="flatEditorWrap">
-      <canvas id="flatEditor"></canvas>
     </div>
     <div class="toolGrid">
       <div class="btn tool-btn active" data-tool="brush" title="Pincel">🖌️</div>
@@ -217,6 +243,9 @@
 </div>
 
 <div id="viewport3d"></div>
+<div id="viewport2d">
+  <canvas id="flatEditor"></canvas>
+</div>
 <div id="stats" class="panel"></div>
 
 <script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
@@ -354,10 +383,47 @@ function buildBone(node, sharedTexturedMat, texW, texH) {
 }
 
 function setErr(msg) {
-  const el = document.getElementById('err');
+  const el = document.getElementById('errBanner');
   if (!msg) { el.style.display = 'none'; el.textContent = ''; return; }
   el.style.display = 'block';
   el.textContent = msg;
+}
+
+// -- Model composition tree: one row per bone, checkbox toggles group.visible.
+// Hiding a THREE.Group hides everything nested under it (three.js skips a whole
+// subtree during render once it hits an invisible object), so this works for
+// whole limbs/head/etc with a single checkbox, no per-cube bookkeeping needed.
+function buildTreeList(nodes) {
+  const ul = document.createElement('ul');
+  nodes.forEach((node) => {
+    const li = document.createElement('li');
+    const row = document.createElement('div');
+    row.className = 'tree-row';
+    const cbId = 'vis-' + node.name;
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.id = cbId;
+    cb.checked = true;
+    cb.addEventListener('change', () => {
+      const g = boneGroups[node.name];
+      if (g) g.visible = cb.checked;
+    });
+    const label = document.createElement('label');
+    label.htmlFor = cbId;
+    label.textContent = node.name;
+    row.appendChild(cb);
+    row.appendChild(label);
+    li.appendChild(row);
+    if (node.children && node.children.length) li.appendChild(buildTreeList(node.children));
+    ul.appendChild(li);
+  });
+  return ul;
+}
+
+function populateTree(skeleton) {
+  const root = document.getElementById('treeRoot');
+  root.innerHTML = '';
+  root.appendChild(buildTreeList(skeleton || []));
 }
 
 function buildModel(data) {
@@ -374,7 +440,7 @@ function buildModel(data) {
   let sharedTexturedMat = new THREE.MeshLambertMaterial({ color: 0x8a7a68 });
   if (data.texture) {
     sharedTexturedMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
-    setupPaintCanvas(data.texture, texW, texH, sharedTexturedMat);
+    setupPaintCanvas(data.texture, texW, texH, sharedTexturedMat, data.cubes);
   } else {
     clearPaintCanvas();
   }
@@ -391,6 +457,7 @@ function buildModel(data) {
 
   currentAnimations = data.animations || {};
   populateAnimPicker();
+  populateTree(data.skeleton);
 
   document.getElementById('stats').textContent =
     `${Object.keys(boneGroups).length} huesos · ${data.cubes ? data.cubes.length : '?'} cubos`;
@@ -483,15 +550,41 @@ const paint = {
   isDrawing: false,
   lastPx: null,
   gradStart: null, gradCurrent: null,
+  uvMask: null,       // Uint8Array(texW*texH): 1 where a UV face actually lives, for putImageData-based tools
+  uvClipPath: null,   // same regions as a Path2D, for fillRect-based tools (brush/gradient)
 };
 
 function storageKeyForModel(modelValue) { return 'mm-paint-tex:' + modelValue; }
 
+// Union of every cube's UV face rectangles, as both a Path2D (cheap clip for
+// fillRect-based drawing) and a pixel mask (needed for putImageData-based
+// drawing, since canvas clip paths don't affect putImageData at all).
+function buildUvGeometry(cubes, w, h) {
+  const mask = new Uint8Array(w * h);
+  const clipPath = new Path2D();
+  (cubes || []).forEach((c) => {
+    if (!c.uv_faces) return;
+    Object.values(c.uv_faces).forEach(([x1, y1, x2, y2]) => {
+      const rx1 = Math.max(0, Math.floor(x1)), ry1 = Math.max(0, Math.floor(y1));
+      const rx2 = Math.min(w, Math.ceil(x2)), ry2 = Math.min(h, Math.ceil(y2));
+      if (rx2 <= rx1 || ry2 <= ry1) return;
+      clipPath.rect(rx1, ry1, rx2 - rx1, ry2 - ry1);
+      for (let yy = ry1; yy < ry2; yy++) {
+        for (let xx = rx1; xx < rx2; xx++) mask[yy * w + xx] = 1;
+      }
+    });
+  });
+  return { mask, clipPath };
+}
+
+// Fills the entire #viewport2d work area (not a cramped little thumbnail) at
+// the largest integer pixel scale that fits, so the atlas stays crisp.
 function sizeFlatEditor() {
   if (!paint.canvas) return;
-  const wrap = document.getElementById('flatEditorWrap');
-  const maxW = wrap.clientWidth || 236;
-  const scale = Math.max(1, Math.floor(maxW / paint.texW));
+  const container = document.getElementById('viewport2d');
+  const maxW = (container.clientWidth || window.innerWidth) - 32;
+  const maxH = (container.clientHeight || window.innerHeight) - 32;
+  const scale = Math.max(1, Math.floor(Math.min(maxW / paint.texW, maxH / paint.texH)));
   paint.canvas.style.width = (paint.texW * scale) + 'px';
   paint.canvas.style.height = (paint.texH * scale) + 'px';
 }
@@ -501,7 +594,7 @@ function updateUndoRedoButtons() {
   document.getElementById('redoBtn').style.opacity = paint.redoStack.length ? '1' : '0.4';
 }
 
-function setupPaintCanvas(url, texW, texH, mat) {
+function setupPaintCanvas(url, texW, texH, mat, cubes) {
   let saved = null;
   try { saved = localStorage.getItem(storageKeyForModel(picker.value)); } catch (err) { saved = null; }
 
@@ -528,6 +621,9 @@ function setupPaintCanvas(url, texW, texH, mat) {
     paint.lastPx = null;
     paint.gradStart = null;
     paint.gradCurrent = null;
+    const geo = buildUvGeometry(cubes, w, h);
+    paint.uvMask = geo.mask;
+    paint.uvClipPath = geo.clipPath;
     updateUndoRedoButtons();
     updateSavedHint();
 
@@ -574,6 +670,8 @@ function clearPaintCanvas() {
   paint.texH = 64;
   paint.undoStack = [];
   paint.redoStack = [];
+  paint.uvMask = null;
+  paint.uvClipPath = null;
   updateUndoRedoButtons();
   sizeFlatEditor();
 }
@@ -636,24 +734,34 @@ function redo() {
   updateUndoRedoButtons();
 }
 
+// fillRect-based drawing respects canvas clip paths, so the UV clip keeps the
+// brush from ever touching the gaps between cube faces.
 function paintSquare(px, py, size, color) {
   const half = Math.floor(size / 2);
+  paint.ctx.save();
+  if (paint.uvClipPath) paint.ctx.clip(paint.uvClipPath);
   paint.ctx.fillStyle = color;
   paint.ctx.fillRect(px - half, py - half, size, size);
+  paint.ctx.restore();
 }
 
 // Eraser restores the original generated texture's pixels rather than going
 // transparent -- more useful for touching up a mistake than punching a hole.
+// putImageData ignores canvas clip paths entirely, so this checks paint.uvMask
+// per pixel instead, starting from the CURRENT canvas contents (not a blank
+// patch) so any pixel outside a UV face is left exactly as it was.
 function eraseSquare(px, py, size) {
   const half = Math.floor(size / 2);
   let x0 = Math.max(0, px - half), y0 = Math.max(0, py - half);
   let x1 = Math.min(paint.texW, px - half + size), y1 = Math.min(paint.texH, py - half + size);
   const w = x1 - x0, h = y1 - y0;
   if (w <= 0 || h <= 0) return;
-  const imgData = paint.ctx.createImageData(w, h);
+  const imgData = paint.ctx.getImageData(x0, y0, w, h);
   for (let yy = 0; yy < h; yy++) {
     for (let xx = 0; xx < w; xx++) {
-      const srcIdx = ((y0 + yy) * paint.texW + (x0 + xx)) * 4;
+      const gx = x0 + xx, gy = y0 + yy;
+      if (paint.uvMask && !paint.uvMask[gy * paint.texW + gx]) continue;
+      const srcIdx = (gy * paint.texW + gx) * 4;
       const dstIdx = (yy * w + xx) * 4;
       imgData.data.set(paint.original.data.subarray(srcIdx, srcIdx + 4), dstIdx);
     }
@@ -712,6 +820,7 @@ function floodFill(startX, startY, fillColorHex) {
     if (x < 0 || y < 0 || x >= w || y >= h) continue;
     const v = y * w + x;
     if (visited[v]) continue;
+    if (paint.uvMask && !paint.uvMask[v]) continue; // never leak past a UV face's edge
     const i = idx(x, y);
     if (!matches(i)) continue;
     visited[v] = 1;
@@ -765,11 +874,14 @@ function applyGradient(start, end) {
   const w = maxX - minX, h = maxY - minY;
   if (w <= 0 || h <= 0) return;
   pushUndo();
+  paint.ctx.save();
+  if (paint.uvClipPath) paint.ctx.clip(paint.uvClipPath);
   const grad = paint.ctx.createLinearGradient(x0, y0, x1, y1);
   grad.addColorStop(0, paint.color);
   grad.addColorStop(1, paint.color2);
   paint.ctx.fillStyle = grad;
   paint.ctx.fillRect(minX, minY, w, h);
+  paint.ctx.restore();
   paint.texture.needsUpdate = true;
 }
 
@@ -841,16 +953,17 @@ function makeCollapsible(headerId) {
 }
 makeCollapsible('controlsHeader');
 makeCollapsible('paintHeader');
+makeCollapsible('treeHeader');
 
-// -- Mobile-only 3D/2D view switch: never show the model and the flat atlas
-// at once on a small screen (the .mobile-hide class only takes effect inside
-// the max-width:640px media query, so this is a no-op on desktop).
-const viewport3d = document.getElementById('viewport3d');
-const flatEditorWrapEl = document.getElementById('flatEditorWrap');
+// -- 3D / 2D work-area switch: only one is ever on screen. The 2D atlas gets
+// the whole viewport (see sizeFlatEditor) instead of a cramped little panel.
+const viewport3dEl = document.getElementById('viewport3d');
+const viewport2dEl = document.getElementById('viewport2d');
 function setPaintView(view) {
   document.querySelectorAll('.view-btn').forEach(b => b.classList.toggle('active', b.dataset.view === view));
-  viewport3d.classList.toggle('mobile-hide', view === '2d');
-  flatEditorWrapEl.classList.toggle('mobile-hide', view === '3d');
+  viewport3dEl.classList.toggle('hidden', view === '2d');
+  viewport2dEl.classList.toggle('open', view === '2d');
+  if (view === '2d') sizeFlatEditor();
 }
 document.querySelectorAll('.view-btn').forEach(btn => {
   btn.addEventListener('click', () => setPaintView(btn.dataset.view));
@@ -868,25 +981,18 @@ paintToggle.addEventListener('click', () => {
   paintPanel.classList.toggle('open', paintMode);
   paintPanel.classList.remove('collapsed');
   controls.mouseButtons = paintMode ? paintModeMouseButtons : defaultMouseButtons;
-  if (paintMode) {
-    sizeFlatEditor();
-    setPaintView('3d'); // start on the model; the person can flip to the 2D atlas on mobile
-  } else {
-    viewport3d.classList.remove('mobile-hide');
-    flatEditorWrapEl.classList.remove('mobile-hide');
-  }
+  setPaintView('3d'); // always start on the model, whether entering or leaving paint mode
 });
 renderer.domElement.addEventListener('contextmenu', (e) => { if (paintMode) e.preventDefault(); });
 
-// -- Pointer handling: flat atlas panel -------------------------------------
-const flatWrap = document.getElementById('flatEditorWrap');
-flatWrap.addEventListener('pointerdown', (e) => {
+// -- Pointer handling: flat atlas view ---------------------------------------
+viewport2dEl.addEventListener('pointerdown', (e) => {
   if (!paint.canvas || !paint.texture) return;
   e.preventDefault();
   const [px, py] = flatEditorPixel(e);
-  if (handlePointerDown(px, py)) flatWrap.setPointerCapture(e.pointerId);
+  if (handlePointerDown(px, py)) viewport2dEl.setPointerCapture(e.pointerId);
 });
-flatWrap.addEventListener('pointermove', (e) => {
+viewport2dEl.addEventListener('pointermove', (e) => {
   if (!paint.isDrawing) return;
   const [px, py] = flatEditorPixel(e);
   handlePointerMove(px, py);
