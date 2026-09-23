@@ -391,9 +391,12 @@ def arm_chain(side):
                     "name": f"{tag}_hand",
                     "origin": [s * 10, 3, 0],
                     "cubes": [
-                        {"from": [s * 6, 1.5, -5], "to": [s * 13, 4.2, 5]},                       # palm
-                        {"from": [s * 6.5, 4.2, 1], "to": [s * 12.5, 5, 5], "color": "#3E3228"},  # knuckle ridge
-                        {"from": [s * 4.5, 1.8, -1], "to": [s * 6.5, 3.6, 3], "color": "#4A3C30"},  # thumb
+                        # Closed fist: a blocky cube (roughly as tall as it is wide/deep) instead of
+                        # the old flat open palm, with a knuckle ridge across the curled-over top and
+                        # a thumb wrapped tightly across the front instead of sticking out to the side.
+                        {"from": [s * 6, 1.5, -5], "to": [s * 13, 8, 5]},                            # fist
+                        {"from": [s * 6.3, 6.8, -5.3], "to": [s * 12.7, 8, 5.3], "color": "#3E3228"},  # curled-knuckle ridge on top
+                        {"from": [s * 4.3, 2, -1.5], "to": [s * 6.3, 6.4, 2.5], "color": "#4A3C30"},  # thumb, wrapped over the front
                     ],
                     "children": [],
                 }],
@@ -432,7 +435,7 @@ golem_boss = [
                     # the jaw a bit (-3 vs -2.8), which is intentional (sloped-skull look).
                     {"from": [-3, 29, -3], "to": [3, 32.5, 2.8], "color": "#8A7A68"},     # cranium
                     {"from": [-2.8, 26, -2.8], "to": [2.8, 29, 2.8], "color": "#6E5C4C", "id": "jaw"},  # jaw block (eyes get painted on its front face)
-                    {"from": [-2.8, 26.3, 2.5], "to": [2.8, 27.8, 4.0], "color": "#5C4B3D"},  # muzzle/snout (same width as the jaw)
+                    {"from": [-2.8, 26.3, 2.5], "to": [2.8, 28.8, 4.0], "color": "#5C4B3D"},  # muzzle/snout, 1px taller than before (extends up toward the brow)
                     # Brow ridge split into independent left/right halves (touching at x=0, same
                     # overall footprint as the old single cube) so each side can be driven by its
                     # own keyframes later (raise/furrow) without touching the other.
