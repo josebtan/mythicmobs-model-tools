@@ -105,8 +105,6 @@
   #viewSwitch { display: flex; gap: 6px; }
   #colorRow2 { display: none; align-items: center; gap: 10px; }
   #paintColor2 { width: 42px; height: 32px; border: none; border-radius: 6px; background: none; padding: 0; cursor: pointer; }
-  #savedHint { display: none; }
-  #savedHint span[data-action] { text-decoration: underline; cursor: pointer; }
 
   /* -- Texture paint editor toolbar (floats over whichever view is active) - */
   #paintPanel {
@@ -234,10 +232,6 @@
     <div class="paintActions">
       <div id="resetTexBtn" class="btn">Restaurar original</div>
     </div>
-    <div class="paintActions">
-      <div id="saveModelBtn" class="btn active">💾 Guardar en el modelo</div>
-    </div>
-    <span id="savedHint" class="hint"></span>
     <a id="downloadTexBtn" class="btn" download>⬇ Descargar textura PNG</a>
   </div>
 </div>
@@ -552,9 +546,8 @@ const paint = {
   gradStart: null, gradCurrent: null,
   uvMask: null,       // Uint8Array(texW*texH): 1 where a UV face actually lives, for putImageData-based tools
   uvClipPath: null,   // same regions as a Path2D, for fillRect-based tools (brush/gradient)
+  textureFilename: null, // e.g. "golem_boss_texture.png" -- the repo path the Save button commits to
 };
-
-function storageKeyForModel(modelValue) { return 'mm-paint-tex:' + modelValue; }
 
 // Union of every cube's UV face rectangles, as both a Path2D (cheap clip for
 // fillRect-based drawing) and a pixel mask (needed for putImageData-based
@@ -595,8 +588,7 @@ function updateUndoRedoButtons() {
 }
 
 function setupPaintCanvas(url, texW, texH, mat, cubes) {
-  let saved = null;
-  try { saved = localStorage.getItem(storageKeyForModel(picker.value)); } catch (err) { saved = null; }
+  paint.textureFilename = url; // repo-relative path, e.g. "golem_boss_texture.png" -- Save commits here
 
   const img = new Image();
   img.crossOrigin = 'anonymous';
@@ -625,7 +617,6 @@ function setupPaintCanvas(url, texW, texH, mat, cubes) {
     paint.uvMask = geo.mask;
     paint.uvClipPath = geo.clipPath;
     updateUndoRedoButtons();
-    updateSavedHint();
 
     const tex = new THREE.CanvasTexture(canvas);
     tex.magFilter = THREE.NearestFilter;
@@ -637,27 +628,14 @@ function setupPaintCanvas(url, texW, texH, mat, cubes) {
 
     sizeFlatEditor();
   };
-  // A locally-saved edit (if any) loads instead of the server PNG -- same texture
-  // dimensions either way, since it was itself saved from this canvas.
+  // Always the server's copy: GitHub is the single source of truth now that
+  // Save commits straight to the repo (see saveTextureToGithub below).
   img.onerror = () => setErr(`No se pudo cargar la textura ${url} para el editor.`);
-  img.src = saved || (url + '?v=' + Date.now());
-}
-
-function updateSavedHint() {
-  const hint = document.getElementById('savedHint');
-  let has = false;
-  try { has = !!localStorage.getItem(storageKeyForModel(picker.value)); } catch (err) { has = false; }
-  if (has) {
-    const name = picker.options[picker.selectedIndex].text;
-    hint.innerHTML = `Guardado en este navegador para <b>${name}</b>. ` +
-      `<span data-action="clear-saved">Usar textura original</span>`;
-    hint.style.display = 'block';
-  } else {
-    hint.style.display = 'none';
-  }
+  img.src = url + '?v=' + Date.now();
 }
 
 function clearPaintCanvas() {
+  paint.textureFilename = null;
   paint.canvas = document.getElementById('flatEditor');
   paint.ctx = paint.canvas.getContext('2d');
   paint.canvas.width = 64;
@@ -885,38 +863,24 @@ function applyGradient(start, end) {
   paint.texture.needsUpdate = true;
 }
 
+// tool can be null -- "no tool selected", which hands left-click back to the
+// orbit camera even while the paint panel is open (see updateMouseButtons).
 function setActiveTool(tool) {
   paint.tool = tool;
   document.querySelectorAll('.tool-btn').forEach(b => b.classList.toggle('active', b.dataset.tool === tool));
   document.getElementById('colorRow2').style.display = tool === 'gradient' ? 'flex' : 'none';
+  updateMouseButtons();
 }
 
-// -- Toolbar wiring ---------------------------------------------------------
+// -- Toolbar wiring -----------------------------------------------------------
+// Clicking the already-active tool's icon turns it off instead of re-selecting it.
 document.querySelectorAll('.tool-btn').forEach(btn => {
-  btn.addEventListener('click', () => setActiveTool(btn.dataset.tool));
+  btn.addEventListener('click', () => {
+    setActiveTool(paint.tool === btn.dataset.tool ? null : btn.dataset.tool);
+  });
 });
 document.getElementById('paintColor').addEventListener('input', (e) => { paint.color = e.target.value; });
 document.getElementById('paintColor2').addEventListener('input', (e) => { paint.color2 = e.target.value; });
-document.getElementById('saveModelBtn').addEventListener('click', () => {
-  if (!paint.canvas || !paint.texture) return;
-  try {
-    localStorage.setItem(storageKeyForModel(picker.value), paint.canvas.toDataURL('image/png'));
-    // The just-saved state becomes the new baseline for the eraser and "Restaurar original".
-    paint.original = paint.ctx.getImageData(0, 0, paint.texW, paint.texH);
-    updateSavedHint();
-    const btn = document.getElementById('saveModelBtn');
-    const prevText = btn.textContent;
-    btn.textContent = '✓ Guardado';
-    setTimeout(() => { btn.textContent = prevText; }, 1500);
-  } catch (err) {
-    setErr('No se pudo guardar en este navegador (¿espacio de almacenamiento lleno?).');
-  }
-});
-document.getElementById('savedHint').addEventListener('click', (e) => {
-  if (e.target.dataset.action !== 'clear-saved') return;
-  localStorage.removeItem(storageKeyForModel(picker.value));
-  loadModel(picker.value); // reload straight from the server's original texture
-});
 const brushSizeInput = document.getElementById('brushSize');
 const brushSizeVal = document.getElementById('brushSizeVal');
 brushSizeInput.addEventListener('input', (e) => {
@@ -975,19 +939,25 @@ const paintToggle = document.getElementById('paintToggle');
 const paintPanel = document.getElementById('paintPanel');
 const defaultMouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
 const paintModeMouseButtons = { LEFT: null, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE };
+// Left-click only paints (rotation moves to right-click) while the editor is
+// open AND a tool is actually selected. Deselecting every tool (second click
+// on its icon) hands left-click back to the camera even with the panel open.
+function updateMouseButtons() {
+  controls.mouseButtons = (paintMode && paint.tool) ? paintModeMouseButtons : defaultMouseButtons;
+}
 paintToggle.addEventListener('click', () => {
   paintMode = !paintMode;
   paintToggle.classList.toggle('active', paintMode);
   paintPanel.classList.toggle('open', paintMode);
   paintPanel.classList.remove('collapsed');
-  controls.mouseButtons = paintMode ? paintModeMouseButtons : defaultMouseButtons;
+  updateMouseButtons();
   setPaintView('3d'); // always start on the model, whether entering or leaving paint mode
 });
 renderer.domElement.addEventListener('contextmenu', (e) => { if (paintMode) e.preventDefault(); });
 
 // -- Pointer handling: flat atlas view ---------------------------------------
 viewport2dEl.addEventListener('pointerdown', (e) => {
-  if (!paint.canvas || !paint.texture) return;
+  if (!paint.tool || !paint.canvas || !paint.texture) return;
   e.preventDefault();
   const [px, py] = flatEditorPixel(e);
   if (handlePointerDown(px, py)) viewport2dEl.setPointerCapture(e.pointerId);
@@ -1000,7 +970,7 @@ viewport2dEl.addEventListener('pointermove', (e) => {
 
 // -- Pointer handling: paint directly on the 3D model via raycasting -------
 renderer.domElement.addEventListener('pointerdown', (e) => {
-  if (!paintMode || e.button !== 0 || !paint.canvas || !paint.texture) return;
+  if (!paintMode || !paint.tool || e.button !== 0 || !paint.canvas || !paint.texture) return;
   const hit = raycastPixel(e);
   if (!hit) return;
   e.preventDefault();
