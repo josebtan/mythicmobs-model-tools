@@ -17,9 +17,13 @@
   html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
   canvas { display: block; touch-action: none; }
 
+  /* topBar holds only small, content-sized chips (paint toggle, account,
+     errors) -- align-items:flex-start keeps them from stretching to match
+     whatever else used to be in this row. The real panels live in #sidebar
+     below, in normal document flow, so they stack without ever overlapping. */
   #topBar {
-    position: absolute; top: 0; left: 0; right: 0; z-index: 10;
-    display: flex; flex-wrap: wrap; gap: 8px; padding: 10px; box-sizing: border-box;
+    position: absolute; top: 0; left: 0; right: 0; z-index: 11;
+    display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px; padding: 10px; box-sizing: border-box;
   }
 
   .panel {
@@ -29,10 +33,19 @@
   }
 
   #errBanner {
-    flex: 1 1 240px; padding: 8px 14px; font-size: 12px; color: #ff8080; display: none;
+    flex: 0 1 320px; padding: 8px 14px; font-size: 12px; color: #ff8080; display: none;
   }
 
-  #controls { flex: 0 1 220px; min-width: 180px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+  /* Left column: Controles / Biblioteca / Partes del modelo, stacked in normal
+     flow. #sidebar's own "top" is set from JS (repositionFloatingPanels) to
+     sit exactly under #topBar's actual rendered height, so it's correct
+     whether topBar is one line or has wrapped to two on a narrow screen. */
+  #sidebar {
+    position: absolute; top: 64px; left: 12px; z-index: 10;
+    width: 240px; max-height: calc(100vh - 80px); overflow-y: auto;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  #controls { padding: 12px; display: flex; flex-direction: column; gap: 8px; }
   #controls label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 2px; }
   #controls select {
     width: 100%; background: #232330; color: var(--text); border: 1px solid var(--border);
@@ -54,13 +67,14 @@
 
   @media (max-width: 640px) {
     #topBar { padding: 8px; gap: 6px; }
-    #controls { flex: 1 1 100%; padding: 10px; gap: 6px; }
+    #controls { padding: 10px; gap: 6px; }
     .btn { padding: 9px 8px; font-size: 12px; }
     #stats { bottom: 8px; left: 8px; font-size: 10px; padding: 5px 10px; }
-    #paintPanel, #treePanel, #libraryPanel { left: 8px; right: 8px; width: auto; }
-    #paintPanel { top: auto; bottom: 8px; max-height: 55vh; }
-    #libraryPanel { top: 96px; max-height: 40vh; }
-    #treePanel { top: 96px; max-height: 40vh; }
+    #sidebar { left: 8px; right: 8px; width: auto; max-height: 40vh; }
+    /* paintPanel anchors to the bottom on mobile instead of tracking topBar's
+       height (repositionFloatingPanels skips it below max-width:640px), so it
+       never competes with #sidebar for the same strip of screen. */
+    #paintPanel { left: 8px; right: 8px; width: auto; top: auto !important; bottom: 8px; max-height: 55vh; }
   }
 
   /* -- Collapsible panels ------------------------------------------------ */
@@ -70,7 +84,7 @@
   }
   .panel-header .chev { color: var(--muted); font-size: 12px; transition: transform 0.15s; flex: 0 0 auto; }
   .panel.collapsed .chev { transform: rotate(-90deg); }
-  #controls .panel-body, #paintPanel .panel-body, #treePanel .panel-body {
+  #controls .panel-body, #paintPanel .panel-body, #treePanel .panel-body, #libraryPanel .panel-body {
     display: flex; flex-direction: column; gap: 8px;
   }
   /* Needs !important: without it, "#controls .panel-body { display:flex }" above
@@ -115,8 +129,8 @@
 
   /* -- Texture paint editor toolbar (floats over whichever view is active) - */
   #paintPanel {
-    position: absolute; top: 96px; right: 12px; z-index: 10;
-    width: 260px; max-height: calc(100vh - 120px); overflow-y: auto;
+    position: absolute; top: 64px; right: 12px; z-index: 10; /* JS refines "top" to match topBar's real height */
+    width: 260px; max-height: calc(100vh - 80px); overflow-y: auto;
     padding: 12px; display: none; flex-direction: column; gap: 10px;
   }
   #paintPanel.open { display: flex; }
@@ -134,12 +148,8 @@
   #downloadTexBtn { display: block; text-align: center; text-decoration: none; }
 
   /* -- Model composition tree --------------------------------------------- */
-  #treePanel {
-    position: absolute; top: 96px; left: 12px; z-index: 10;
-    width: 220px; max-height: calc(100vh - 120px); overflow-y: auto;
-    padding: 12px;
-  }
-  #treeRoot { font-size: 12px; }
+  #treePanel { padding: 12px; }
+  #treeRoot { font-size: 12px; max-height: 240px; overflow-y: auto; }
   #treeRoot ul { list-style: none; margin: 0; padding-left: 16px; }
   #treeRoot > ul { padding-left: 0; }
   #treeRoot li { margin: 2px 0; }
@@ -148,11 +158,7 @@
   .tree-row input[type=checkbox] { flex: 0 0 auto; accent-color: var(--accent); cursor: pointer; }
 
   /* -- Model library -------------------------------------------------------- */
-  #libraryPanel {
-    position: absolute; top: 96px; left: 12px; z-index: 10;
-    width: 240px; max-height: calc(100vh - 120px); overflow-y: auto; padding: 12px;
-  }
-  #treePanel { top: 96px; } /* JS bumps this down when the library panel is expanded */
+  #libraryPanel { padding: 12px; }
   #libraryList { display: flex; flex-direction: column; max-height: 220px; overflow-y: auto; }
   .lib-row {
     display: flex; align-items: center; justify-content: space-between; gap: 8px;
@@ -166,6 +172,20 @@
 </head>
 <body>
 <div id="topBar">
+  <!-- Deliberately separate from #controls: this opens a whole different editing
+       mode (texture painting), not just another preview/animation setting. Kept
+       out of #sidebar and in #topBar since it's a mode toggle, not a browsing panel. -->
+  <div id="paintToggle" class="panel">🎨 Editor de textura</div>
+
+  <div id="accountChip" class="panel">👤 Iniciar sesión con Google</div>
+
+  <div id="errBanner" class="panel"></div>
+</div>
+
+<!-- Controles / Biblioteca / Partes del modelo: one column, normal document
+     flow, so they stack top-to-bottom without ever landing on the same spot
+     (see repositionFloatingPanels for how #sidebar's own "top" is set). -->
+<div id="sidebar">
   <div id="controls" class="panel">
     <div id="controlsHeader" class="panel-header">
       <span>Controles</span>
@@ -195,39 +215,31 @@
     </div>
   </div>
 
-  <!-- Deliberately separate from #controls: this opens a whole different editing
-       mode (texture painting), not just another preview/animation setting. -->
-  <div id="paintToggle" class="panel">🎨 Editor de textura</div>
-
-  <div id="accountChip" class="panel">👤 Iniciar sesión con Google</div>
-
-  <div id="errBanner" class="panel"></div>
-</div>
-
-<div id="libraryPanel" class="panel collapsed">
-  <div id="libraryHeader" class="panel-header">
-    <span>📚 Biblioteca</span>
-    <span class="chev">▾</span>
-  </div>
-  <div class="panel-body">
-    <div class="row">
-      <div class="btn lib-tab-btn active" data-tab="mine">Mía</div>
-      <div class="btn lib-tab-btn" data-tab="public">Pública</div>
+  <div id="libraryPanel" class="panel collapsed">
+    <div id="libraryHeader" class="panel-header">
+      <span>📚 Biblioteca</span>
+      <span class="chev">▾</span>
     </div>
-    <div id="libraryList"><span class="hint">Conectando…</span></div>
-    <div id="saveToLibraryBtn" class="btn active">💾 Guardar modelo actual…</div>
-    <div id="migrateBuiltinsBtn" class="btn">🌱 Importar modelos de ejemplo</div>
+    <div class="panel-body">
+      <div class="row">
+        <div class="btn lib-tab-btn active" data-tab="mine">Mía</div>
+        <div class="btn lib-tab-btn" data-tab="public">Pública</div>
+      </div>
+      <div id="libraryList"><span class="hint">Conectando…</span></div>
+      <div id="saveToLibraryBtn" class="btn active">💾 Guardar modelo actual…</div>
+      <div id="migrateBuiltinsBtn" class="btn">🌱 Importar modelos de ejemplo</div>
+    </div>
   </div>
-</div>
 
-<div id="treePanel" class="panel collapsed">
-  <div id="treeHeader" class="panel-header">
-    <span>🧬 Partes del modelo</span>
-    <span class="chev">▾</span>
-  </div>
-  <div class="panel-body">
-    <span class="hint">Tocá para mostrar/ocultar cada parte.</span>
-    <div id="treeRoot"></div>
+  <div id="treePanel" class="panel collapsed">
+    <div id="treeHeader" class="panel-header">
+      <span>🧬 Partes del modelo</span>
+      <span class="chev">▾</span>
+    </div>
+    <div class="panel-body">
+      <span class="hint">Tocá para mostrar/ocultar cada parte.</span>
+      <div id="treeRoot"></div>
+    </div>
   </div>
 </div>
 
@@ -273,6 +285,7 @@
     <div class="paintActions">
       <div id="resetTexBtn" class="btn">Restaurar original</div>
     </div>
+    <div id="saveTextureInPlaceBtn" class="btn active">💾 Guardar textura en este modelo</div>
     <a id="downloadTexBtn" class="btn" download>⬇ Descargar textura PNG</a>
   </div>
 </div>
@@ -368,11 +381,26 @@
     await updateDoc(doc(db, 'models', id), { visibility, updatedAt: serverTimestamp() });
   }
 
+  // Overwrites an existing doc's content in place (the "Guardar textura en
+  // este modelo" button) instead of creating a new library entry. Caller is
+  // responsible for only offering this when the loaded model is the user's own.
+  async function updateModelContent(id, cubesData, textureDataUrl) {
+    const user = auth.currentUser;
+    if (!user) throw new Error('Necesitás iniciar sesión.');
+    await updateDoc(doc(db, 'models', id), {
+      cubesJson: JSON.stringify({ ...cubesData, texture: textureDataUrl }),
+      updatedAt: serverTimestamp(),
+    });
+  }
+
   async function removeModel(id) {
     await deleteDoc(doc(db, 'models', id));
   }
 
-  window.mmLibrary = { signIn, signOut: signOutUser, saveModel, listMine, listPublic, loadById, setVisibility, removeModel };
+  window.mmLibrary = {
+    signIn, signOut: signOutUser, saveModel, listMine, listPublic, loadById,
+    setVisibility, updateModelContent, removeModel,
+  };
   window.dispatchEvent(new Event('mm-firebase-ready'));
 </script>
 
@@ -421,6 +449,7 @@ scene.add(grid);
 
 let currentGroup = null;
 let currentModelData = null; // raw skeleton/cubes/animations JSON of whatever's loaded -- Save reads this
+let currentLibraryModel = null; // {id, ownerId} if the loaded model came from Firestore; null for repo/static models
 let boneGroups = {};      // name -> THREE.Group, for animation targeting
 let texturesOn = true;
 
@@ -643,6 +672,7 @@ function setDownloadAvailable(bbmodelPath) {
 }
 
 picker.addEventListener('change', (e) => {
+  currentLibraryModel = null;
   loadModel(e.target.value);
   syncDownloadLink();
 });
@@ -1040,6 +1070,31 @@ document.getElementById('resetTexBtn').addEventListener('click', () => {
   paint.ctx.putImageData(paint.original, 0, 0);
   paint.texture.needsUpdate = true;
 });
+document.getElementById('saveTextureInPlaceBtn').addEventListener('click', async () => {
+  if (!window.mmLibrary) { setErr('Todavía está cargando Firebase, esperá un segundo.'); return; }
+  if (!paint.canvas || !paint.texture) { setErr('No hay ninguna textura cargada para guardar.'); return; }
+  if (!currentLibraryModel) {
+    setErr('Este modelo no viene de tu biblioteca (es uno de los fijos del repo). Usá "Guardar modelo actual…" en el panel Biblioteca para guardarlo como uno nuevo.');
+    return;
+  }
+  if (!window.mmCurrentUser || currentLibraryModel.ownerId !== window.mmCurrentUser.uid) {
+    setErr('Este modelo no es tuyo, no se puede sobrescribir. Guardalo como uno nuevo desde el panel Biblioteca.');
+    return;
+  }
+  const btn = document.getElementById('saveTextureInPlaceBtn');
+  const prevText = btn.textContent;
+  btn.textContent = 'Guardando…';
+  try {
+    const textureDataUrl = paint.canvas.toDataURL('image/png');
+    await window.mmLibrary.updateModelContent(currentLibraryModel.id, currentModelData, textureDataUrl);
+    paint.original = paint.ctx.getImageData(0, 0, paint.texW, paint.texH);
+    btn.textContent = '✓ Guardado';
+  } catch (err) {
+    setErr('No se pudo guardar: ' + err.message);
+  }
+  setTimeout(() => { btn.textContent = prevText; }, 1500);
+});
+
 document.getElementById('downloadTexBtn').addEventListener('click', (e) => {
   if (!paint.canvas || !paint.texture) { e.preventDefault(); return; }
   const opt = picker.options[picker.selectedIndex];
@@ -1152,6 +1207,7 @@ function buildLibraryRow(item) {
       const data = await window.mmLibrary.loadById(item.id);
       buildModel(data);
       setDownloadAvailable(null); // no static .bbmodel file behind a library model
+      currentLibraryModel = { id: item.id, ownerId: item.ownerId };
     } catch (err) {
       setErr('No se pudo cargar: ' + err.message);
     }
@@ -1205,12 +1261,13 @@ document.getElementById('saveToLibraryBtn').addEventListener('click', async () =
   btn.textContent = 'Guardando…';
   try {
     const textureDataUrl = paint.canvas && paint.texture ? paint.canvas.toDataURL('image/png') : null;
-    await window.mmLibrary.saveModel({
+    const newId = await window.mmLibrary.saveModel({
       name,
       visibility: makePublic ? 'public' : 'private',
       cubesData: currentModelData,
       textureDataUrl,
     });
+    currentLibraryModel = { id: newId, ownerId: window.mmCurrentUser.uid };
     btn.textContent = '✓ Guardado';
     refreshLibrary();
   } catch (err) {
@@ -1265,6 +1322,31 @@ document.getElementById('migrateBuiltinsBtn').addEventListener('click', async ()
 
 window.addEventListener('mm-firebase-ready', refreshLibrary);
 refreshLibrary();
+
+// -- Keep the floating panels from ever landing on top of #topBar or each
+// other: #sidebar and #paintPanel both sit "top: <topBar's real height> + gap"
+// instead of a guessed fixed pixel value, so this stays correct whether
+// topBar wraps to one line or two (long account name, narrow window, etc).
+// On mobile, #paintPanel is bottom-anchored by its own media-query rule
+// instead, so it's left alone here.
+(function () {
+  const gap = 12;
+  const topBarEl = document.getElementById('topBar');
+  const sidebarEl = document.getElementById('sidebar');
+  const paintPanelEl = document.getElementById('paintPanel');
+  function reposition() {
+    const top = (topBarEl.getBoundingClientRect().bottom + gap) + 'px';
+    sidebarEl.style.top = top;
+    if (window.matchMedia('(max-width: 640px)').matches) {
+      paintPanelEl.style.top = '';
+    } else {
+      paintPanelEl.style.top = top;
+    }
+  }
+  new ResizeObserver(reposition).observe(topBarEl);
+  window.addEventListener('resize', reposition);
+  reposition();
+})();
 
 // -- 3D / 2D work-area switch: only one is ever on screen. The 2D atlas gets
 // the whole viewport (see sizeFlatEditor) instead of a cramped little panel.
