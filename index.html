@@ -265,6 +265,9 @@
       <div class="btn tool-btn" data-tool="bucket" title="Balde de pintura">🪣</div>
       <div class="btn tool-btn" data-tool="gradient" title="Degradado: arrastrá para definir dirección y área">🌈</div>
     </div>
+    <div class="row">
+      <div id="mirrorToggle" class="btn" title="Espeja cada trazo en el eje X del atlas">🪞 Espejo (X)</div>
+    </div>
     <div id="colorRow">
       <input type="color" id="paintColor" value="#8a7a68">
       <span class="hint">Color 1</span>
@@ -719,6 +722,7 @@ const paint = {
   isDrawing: false,
   lastPx: null,
   gradStart: null, gradCurrent: null,
+  mirror: false,      // when on, every paint op also happens at (texW-1-x, y)
   uvMask: null,       // Uint8Array(texW*texH): 1 where a UV face actually lives, for putImageData-based tools
   uvClipPath: null,   // same regions as a Path2D, for fillRect-based tools (brush/gradient)
   textureFilename: null, // e.g. "golem_boss_texture.png" -- the repo path the Save button commits to
@@ -922,9 +926,16 @@ function eraseSquare(px, py, size) {
   paint.ctx.putImageData(imgData, x0, y0);
 }
 
+function mirroredX(x) { return paint.texW - 1 - x; }
+
 function applyTool(px, py) {
   if (paint.tool === 'brush') paintSquare(px, py, paint.size, paint.color);
   else if (paint.tool === 'eraser') eraseSquare(px, py, paint.size);
+  if (paint.mirror) {
+    const mx = mirroredX(px);
+    if (paint.tool === 'brush') paintSquare(mx, py, paint.size, paint.color);
+    else if (paint.tool === 'eraser') eraseSquare(mx, py, paint.size);
+  }
   paint.texture.needsUpdate = true;
 }
 
@@ -988,6 +999,7 @@ function handlePointerDown(px, py) {
   if (paint.tool === 'bucket') {
     pushUndo();
     floodFill(px, py, paint.color);
+    if (paint.mirror) floodFill(mirroredX(px), py, paint.color);
     paint.texture.needsUpdate = true;
     return false;
   }
@@ -1016,17 +1028,13 @@ function handlePointerMove(px, py) {
 // runs along that same vector (color1 at start, color2 at end) -- drag across
 // a face of the model to gradient just that area, same idea as Photoshop's
 // gradient tool but scoped to the dragged box instead of a whole selection.
-function applyGradient(start, end) {
-  if (!paint.ctx) return;
-  const [x0, y0] = start, [x1, y1] = end;
-  if (Math.hypot(x1 - x0, y1 - y0) < 2) return; // a tap, not a drag -- no-op
+function drawGradientSegment(x0, y0, x1, y1) {
   const minX = Math.max(0, Math.min(x0, x1));
   const minY = Math.max(0, Math.min(y0, y1));
   const maxX = Math.min(paint.texW, Math.max(x0, x1) + 1);
   const maxY = Math.min(paint.texH, Math.max(y0, y1) + 1);
   const w = maxX - minX, h = maxY - minY;
   if (w <= 0 || h <= 0) return;
-  pushUndo();
   paint.ctx.save();
   if (paint.uvClipPath) paint.ctx.clip(paint.uvClipPath);
   const grad = paint.ctx.createLinearGradient(x0, y0, x1, y1);
@@ -1035,6 +1043,15 @@ function applyGradient(start, end) {
   paint.ctx.fillStyle = grad;
   paint.ctx.fillRect(minX, minY, w, h);
   paint.ctx.restore();
+}
+
+function applyGradient(start, end) {
+  if (!paint.ctx) return;
+  const [x0, y0] = start, [x1, y1] = end;
+  if (Math.hypot(x1 - x0, y1 - y0) < 2) return; // a tap, not a drag -- no-op
+  pushUndo();
+  drawGradientSegment(x0, y0, x1, y1);
+  if (paint.mirror) drawGradientSegment(mirroredX(x0), y0, mirroredX(x1), y1);
   paint.texture.needsUpdate = true;
 }
 
@@ -1053,6 +1070,10 @@ document.querySelectorAll('.tool-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     setActiveTool(paint.tool === btn.dataset.tool ? null : btn.dataset.tool);
   });
+});
+document.getElementById('mirrorToggle').addEventListener('click', (e) => {
+  paint.mirror = !paint.mirror;
+  e.currentTarget.classList.toggle('active', paint.mirror);
 });
 document.getElementById('paintColor').addEventListener('input', (e) => { paint.color = e.target.value; });
 document.getElementById('paintColor2').addEventListener('input', (e) => { paint.color2 = e.target.value; });
