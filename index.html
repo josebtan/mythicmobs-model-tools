@@ -57,8 +57,9 @@
     #controls { flex: 1 1 100%; padding: 10px; gap: 6px; }
     .btn { padding: 9px 8px; font-size: 12px; }
     #stats { bottom: 8px; left: 8px; font-size: 10px; padding: 5px 10px; }
-    #paintPanel, #treePanel { left: 8px; right: 8px; width: auto; }
+    #paintPanel, #treePanel, #libraryPanel { left: 8px; right: 8px; width: auto; }
     #paintPanel { top: auto; bottom: 8px; max-height: 55vh; }
+    #libraryPanel { top: 96px; max-height: 40vh; }
     #treePanel { top: 96px; max-height: 40vh; }
   }
 
@@ -83,6 +84,12 @@
     padding: 10px 14px; cursor: pointer; user-select: none; font-size: 13px; font-weight: 600;
   }
   #paintToggle.panel.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  #accountChip.panel {
+    padding: 10px 14px; cursor: pointer; user-select: none; font-size: 13px; font-weight: 600;
+    max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  #accountChip.panel.active { background: #2a3a2a; border-color: #3d5a3d; }
 
   /* -- 3D / 2D work areas: full-screen, mutually exclusive ---------------- */
   #viewport3d, #viewport2d { position: absolute; inset: 0; }
@@ -139,6 +146,22 @@
   .tree-row { display: flex; align-items: center; gap: 6px; }
   .tree-row label { cursor: pointer; user-select: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .tree-row input[type=checkbox] { flex: 0 0 auto; accent-color: var(--accent); cursor: pointer; }
+
+  /* -- Model library -------------------------------------------------------- */
+  #libraryPanel {
+    position: absolute; top: 96px; left: 12px; z-index: 10;
+    width: 240px; max-height: calc(100vh - 120px); overflow-y: auto; padding: 12px;
+  }
+  #treePanel { top: 96px; } /* JS bumps this down when the library panel is expanded */
+  #libraryList { display: flex; flex-direction: column; max-height: 220px; overflow-y: auto; }
+  .lib-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 12px;
+  }
+  .lib-row:last-child { border-bottom: none; }
+  .lib-meta { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lib-actions { display: flex; gap: 4px; flex: 0 0 auto; }
+  .lib-actions .btn { padding: 5px 7px; font-size: 11px; }
 </style>
 </head>
 <body>
@@ -176,10 +199,28 @@
        mode (texture painting), not just another preview/animation setting. -->
   <div id="paintToggle" class="panel">🎨 Editor de textura</div>
 
+  <div id="accountChip" class="panel">👤 Iniciar sesión con Google</div>
+
   <div id="errBanner" class="panel"></div>
 </div>
 
-<div id="treePanel" class="panel">
+<div id="libraryPanel" class="panel collapsed">
+  <div id="libraryHeader" class="panel-header">
+    <span>📚 Biblioteca</span>
+    <span class="chev">▾</span>
+  </div>
+  <div class="panel-body">
+    <div class="row">
+      <div class="btn lib-tab-btn active" data-tab="mine">Mía</div>
+      <div class="btn lib-tab-btn" data-tab="public">Pública</div>
+    </div>
+    <div id="libraryList"><span class="hint">Conectando…</span></div>
+    <div id="saveToLibraryBtn" class="btn active">💾 Guardar modelo actual…</div>
+    <div id="migrateBuiltinsBtn" class="btn">🌱 Importar modelos de ejemplo</div>
+  </div>
+</div>
+
+<div id="treePanel" class="panel collapsed">
   <div id="treeHeader" class="panel-header">
     <span>🧬 Partes del modelo</span>
     <span class="chev">▾</span>
@@ -244,6 +285,97 @@
 
 <script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
 <script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+<!-- Firebase: model library (auth + Firestore). ES modules are deferred by the
+     spec, so this always finishes initializing after the classic <script>
+     below has run -- window.mmOnAuthChange is defined there first, then called
+     from here once auth state is known. The apiKey etc. below is meant to be
+     public; Firestore's security rules (not this key) are what gate access. -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
+  import {
+    getAuth, GoogleAuthProvider, signInWithPopup, signOut as fbSignOut, onAuthStateChanged
+  } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js";
+  import {
+    getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, getDoc, getDocs, query, where, serverTimestamp
+  } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyBBkktkunaRSLNOHPojvP7N7hY_sgGnt-s",
+    authDomain: "mythicmobs-model-tools.firebaseapp.com",
+    projectId: "mythicmobs-model-tools",
+    storageBucket: "mythicmobs-model-tools.firebasestorage.app",
+    messagingSenderId: "421775502930",
+    appId: "1:421775502930:web:d884b57d471da4dd9b798b"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+  const provider = new GoogleAuthProvider();
+  const modelsCol = collection(db, 'models');
+
+  window.mmCurrentUser = null;
+  onAuthStateChanged(auth, (user) => {
+    window.mmCurrentUser = user;
+    if (window.mmOnAuthChange) window.mmOnAuthChange(user);
+  });
+
+  async function signIn() { await signInWithPopup(auth, provider); }
+  async function signOutUser() { await fbSignOut(auth); }
+
+  // cubesData: the full model JSON (skeleton/cubes/animations/texture_size).
+  // textureDataUrl: current canvas as a "data:image/png;base64,..." string --
+  // there's no Storage bucket (needs the paid plan), so the texture rides
+  // along inside the same Firestore document as a base64 field. Fine at this
+  // model size (a few KB), well under Firestore's 1MiB-per-document limit,
+  // which Firestore itself enforces regardless of what the rules say.
+  async function saveModel({ name, visibility, cubesData, textureDataUrl }) {
+    const user = auth.currentUser;
+    if (!user) throw new Error('Necesitás iniciar sesión.');
+    const payload = {
+      name,
+      visibility,
+      ownerId: user.uid,
+      ownerName: user.displayName || user.email || 'Anónimo',
+      cubesJson: JSON.stringify({ ...cubesData, texture: textureDataUrl }),
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
+    const ref = await addDoc(modelsCol, payload);
+    return ref.id;
+  }
+
+  async function listMine() {
+    const user = auth.currentUser;
+    if (!user) return [];
+    const snap = await getDocs(query(modelsCol, where('ownerId', '==', user.uid)));
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  }
+
+  async function listPublic() {
+    const snap = await getDocs(query(modelsCol, where('visibility', '==', 'public')));
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  }
+
+  async function loadById(id) {
+    const snap = await getDoc(doc(db, 'models', id));
+    if (!snap.exists()) throw new Error('Modelo no encontrado.');
+    return JSON.parse(snap.data().cubesJson);
+  }
+
+  async function setVisibility(id, visibility) {
+    await updateDoc(doc(db, 'models', id), { visibility, updatedAt: serverTimestamp() });
+  }
+
+  async function removeModel(id) {
+    await deleteDoc(doc(db, 'models', id));
+  }
+
+  window.mmLibrary = { signIn, signOut: signOutUser, saveModel, listMine, listPublic, loadById, setVisibility, removeModel };
+  window.dispatchEvent(new Event('mm-firebase-ready'));
+</script>
+
 <script>
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x16161c);
@@ -288,6 +420,7 @@ scene.add(grid);
 // ---------------------------------------------------------------------------
 
 let currentGroup = null;
+let currentModelData = null; // raw skeleton/cubes/animations JSON of whatever's loaded -- Save reads this
 let boneGroups = {};      // name -> THREE.Group, for animation targeting
 let texturesOn = true;
 
@@ -423,6 +556,7 @@ function populateTree(skeleton) {
 function buildModel(data) {
   clearModel();
   setErr('');
+  currentModelData = data;
   const outer = new THREE.Group();
 
   if (!data.skeleton) {
@@ -493,8 +627,19 @@ let animStartTime = 0;
 
 function syncDownloadLink() {
   const opt = picker.options[picker.selectedIndex];
-  downloadBtn.href = opt.dataset.bbmodel;
-  downloadBtn.setAttribute('download', opt.dataset.bbmodel);
+  setDownloadAvailable(opt.dataset.bbmodel);
+}
+
+// Library-loaded models have no static .bbmodel file to point at (they only
+// exist as a Firestore doc), so the download link just disappears for those.
+function setDownloadAvailable(bbmodelPath) {
+  if (bbmodelPath) {
+    downloadBtn.style.display = '';
+    downloadBtn.href = bbmodelPath;
+    downloadBtn.setAttribute('download', bbmodelPath);
+  } else {
+    downloadBtn.style.display = 'none';
+  }
 }
 
 picker.addEventListener('change', (e) => {
@@ -628,10 +773,10 @@ function setupPaintCanvas(url, texW, texH, mat, cubes) {
 
     sizeFlatEditor();
   };
-  // Always the server's copy: GitHub is the single source of truth now that
-  // Save commits straight to the repo (see saveTextureToGithub below).
-  img.onerror = () => setErr(`No se pudo cargar la textura ${url} para el editor.`);
-  img.src = url + '?v=' + Date.now();
+  img.onerror = () => setErr(`No se pudo cargar la textura para el editor.`);
+  // A library model's texture is an inline base64 data: URL (no file to cache-bust);
+  // a repo-file model's texture is a real path, where the cache-bust matters.
+  img.src = url.startsWith('data:') ? url : (url + '?v=' + Date.now());
 }
 
 function clearPaintCanvas() {
@@ -918,6 +1063,208 @@ function makeCollapsible(headerId) {
 makeCollapsible('controlsHeader');
 makeCollapsible('paintHeader');
 makeCollapsible('treeHeader');
+makeCollapsible('libraryHeader');
+
+// ---------------------------------------------------------------------------
+// Account + model library (Firebase). window.mmLibrary/window.mmCurrentUser
+// come from the <script type="module"> block above, once it finishes loading.
+// ---------------------------------------------------------------------------
+function escapeHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s == null ? '' : String(s);
+  return d.innerHTML;
+}
+
+const accountChip = document.getElementById('accountChip');
+window.mmOnAuthChange = function (user) {
+  if (user) {
+    accountChip.textContent = `👤 ${user.displayName || user.email || 'Cuenta'} · Salir`;
+    accountChip.classList.add('active');
+  } else {
+    accountChip.textContent = '👤 Iniciar sesión con Google';
+    accountChip.classList.remove('active');
+  }
+  refreshLibrary();
+};
+accountChip.addEventListener('click', async () => {
+  if (!window.mmLibrary) { setErr('Todavía está cargando Firebase, esperá un segundo.'); return; }
+  try {
+    if (window.mmCurrentUser) await window.mmLibrary.signOut();
+    else await window.mmLibrary.signIn();
+  } catch (err) {
+    setErr('Error de autenticación: ' + err.message);
+  }
+});
+
+let libraryTab = 'mine';
+document.querySelectorAll('.lib-tab-btn').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    libraryTab = btn.dataset.tab;
+    document.querySelectorAll('.lib-tab-btn').forEach((b) => b.classList.toggle('active', b === btn));
+    refreshLibrary();
+  });
+});
+
+async function refreshLibrary() {
+  const listEl = document.getElementById('libraryList');
+  if (!window.mmLibrary) { listEl.innerHTML = '<span class="hint">Conectando…</span>'; return; }
+  if (libraryTab === 'mine' && !window.mmCurrentUser) {
+    listEl.innerHTML = '<span class="hint">Iniciá sesión para ver tu biblioteca.</span>';
+    return;
+  }
+  listEl.innerHTML = '<span class="hint">Cargando…</span>';
+  try {
+    const items = libraryTab === 'mine' ? await window.mmLibrary.listMine() : await window.mmLibrary.listPublic();
+    if (!items.length) {
+      listEl.innerHTML = `<span class="hint">${libraryTab === 'mine' ? 'Todavía no guardaste nada.' : 'Todavía no hay modelos públicos.'}</span>`;
+      return;
+    }
+    listEl.innerHTML = '';
+    items.forEach((item) => listEl.appendChild(buildLibraryRow(item)));
+  } catch (err) {
+    listEl.innerHTML = `<span class="hint">Error: ${escapeHtml(err.message)}</span>`;
+  }
+}
+
+function buildLibraryRow(item) {
+  const isMine = window.mmCurrentUser && item.ownerId === window.mmCurrentUser.uid;
+
+  const row = document.createElement('div');
+  row.className = 'lib-row';
+
+  const meta = document.createElement('div');
+  meta.className = 'lib-meta';
+  meta.innerHTML = `<b>${escapeHtml(item.name)}</b>` +
+    (libraryTab === 'public' ? ` <span class="hint">· ${escapeHtml(item.ownerName)}</span>` : '') +
+    (item.visibility === 'public' ? ' 🌐' : ' 🔒');
+  row.appendChild(meta);
+
+  const actions = document.createElement('div');
+  actions.className = 'lib-actions';
+
+  const loadBtn = document.createElement('div');
+  loadBtn.className = 'btn';
+  loadBtn.textContent = 'Cargar';
+  loadBtn.addEventListener('click', async () => {
+    const prev = loadBtn.textContent;
+    loadBtn.textContent = '…';
+    try {
+      const data = await window.mmLibrary.loadById(item.id);
+      buildModel(data);
+      setDownloadAvailable(null); // no static .bbmodel file behind a library model
+    } catch (err) {
+      setErr('No se pudo cargar: ' + err.message);
+    }
+    loadBtn.textContent = prev;
+  });
+  actions.appendChild(loadBtn);
+
+  if (isMine) {
+    const visBtn = document.createElement('div');
+    visBtn.className = 'btn';
+    visBtn.textContent = item.visibility === 'public' ? 'Hacer privada' : 'Publicar';
+    visBtn.addEventListener('click', async () => {
+      try {
+        await window.mmLibrary.setVisibility(item.id, item.visibility === 'public' ? 'private' : 'public');
+        refreshLibrary();
+      } catch (err) {
+        setErr('No se pudo cambiar la visibilidad: ' + err.message);
+      }
+    });
+    actions.appendChild(visBtn);
+
+    const delBtn = document.createElement('div');
+    delBtn.className = 'btn';
+    delBtn.textContent = '🗑️';
+    delBtn.title = 'Eliminar';
+    delBtn.addEventListener('click', async () => {
+      if (!confirm(`¿Eliminar "${item.name}"? No se puede deshacer.`)) return;
+      try {
+        await window.mmLibrary.removeModel(item.id);
+        refreshLibrary();
+      } catch (err) {
+        setErr('No se pudo eliminar: ' + err.message);
+      }
+    });
+    actions.appendChild(delBtn);
+  }
+  row.appendChild(actions);
+  return row;
+}
+
+document.getElementById('saveToLibraryBtn').addEventListener('click', async () => {
+  if (!window.mmLibrary) { setErr('Todavía está cargando Firebase, esperá un segundo.'); return; }
+  if (!window.mmCurrentUser) { alert('Iniciá sesión con Google primero.'); return; }
+  if (!currentModelData) { alert('No hay ningún modelo cargado para guardar.'); return; }
+  const name = prompt('Nombre para este modelo:', currentModelData.name || '');
+  if (!name) return;
+  const makePublic = confirm('¿Guardarlo como público (lo puede ver y cargar cualquiera)?\n\nAceptar = Público · Cancelar = Privado (solo vos).');
+
+  const btn = document.getElementById('saveToLibraryBtn');
+  const prevText = btn.textContent;
+  btn.textContent = 'Guardando…';
+  try {
+    const textureDataUrl = paint.canvas && paint.texture ? paint.canvas.toDataURL('image/png') : null;
+    await window.mmLibrary.saveModel({
+      name,
+      visibility: makePublic ? 'public' : 'private',
+      cubesData: currentModelData,
+      textureDataUrl,
+    });
+    btn.textContent = '✓ Guardado';
+    refreshLibrary();
+  } catch (err) {
+    setErr('No se pudo guardar: ' + err.message);
+  }
+  setTimeout(() => { btn.textContent = prevText; }, 1500);
+});
+
+// One-click import of the repo's built-in demo_mob/golem_boss into Firestore
+// as public models -- the actual "migrate everything to Firebase" step. Run
+// once per account; re-running just adds duplicate entries (no dedup check),
+// so it's a manual, deliberate action rather than something that runs itself.
+function imageUrlToDataUrl(url) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const c = document.createElement('canvas');
+      c.width = img.naturalWidth;
+      c.height = img.naturalHeight;
+      c.getContext('2d').drawImage(img, 0, 0);
+      resolve(c.toDataURL('image/png'));
+    };
+    img.onerror = reject;
+    img.src = url + '?v=' + Date.now();
+  });
+}
+
+document.getElementById('migrateBuiltinsBtn').addEventListener('click', async () => {
+  if (!window.mmLibrary) { setErr('Todavía está cargando Firebase, esperá un segundo.'); return; }
+  if (!window.mmCurrentUser) { alert('Iniciá sesión con Google primero.'); return; }
+  const builtins = [
+    { name: 'demo_mob', jsonPath: 'demo_mob_cubes.json', texPath: 'demo_mob_texture.png' },
+    { name: 'golem_boss', jsonPath: 'golem_boss_cubes.json', texPath: 'golem_boss_texture.png' },
+  ];
+  const btn = document.getElementById('migrateBuiltinsBtn');
+  const prevText = btn.textContent;
+  for (const b of builtins) {
+    btn.textContent = `Importando ${b.name}…`;
+    try {
+      const data = await fetch(b.jsonPath + '?v=' + Date.now()).then((r) => r.json());
+      const textureDataUrl = await imageUrlToDataUrl(b.texPath);
+      await window.mmLibrary.saveModel({ name: b.name, visibility: 'public', cubesData: data, textureDataUrl });
+    } catch (err) {
+      setErr(`No se pudo importar ${b.name}: ${err.message}`);
+    }
+  }
+  btn.textContent = '✓ Importados';
+  refreshLibrary();
+  setTimeout(() => { btn.textContent = prevText; }, 2000);
+});
+
+window.addEventListener('mm-firebase-ready', refreshLibrary);
+refreshLibrary();
 
 // -- 3D / 2D work-area switch: only one is ever on screen. The 2D atlas gets
 // the whole viewport (see sizeFlatEditor) instead of a cramped little panel.
