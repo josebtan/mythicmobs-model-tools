@@ -670,7 +670,7 @@ function buildModel(data) {
   currentAnimations = data.animations || {};
   populateAnimPicker();
   populateTree(data.skeleton);
-  updateMirrorAvailability(data.skeleton);
+  updateMirrorAvailability(data.cubes);
 
   document.getElementById('stats').textContent =
     `${Object.keys(boneGroups).length} huesos · ${data.cubes ? data.cubes.length : '?'} cubos`;
@@ -996,72 +996,87 @@ function eraseSquare(px, py, size) {
 }
 
 // ---------------------------------------------------------------------------
-// Mirror map: real left<->right UV correspondence, built from the model's own
-// bone names and cube ids -- NOT a blind "texW-1-x" reflection of the atlas.
-// Mirroring the raw atlas coordinate only makes sense if the packer happened
-// to place the paired part at the mirrored spot, which it generally doesn't
-// (each cube gets packed wherever the shelf-packing heuristic puts it). This
-// instead finds actual left_X/right_X bone pairs (whole limbs) and left/right
-// cube-id pairs sharing one bone (like brow_left/brow_right), and maps each
-// paired UV face to the other, face-for-face.
+// Mirror map: Blender-style axis mirror, not a naming convention. For the
+// chosen world axis (X/Y/Z), every cube's UV faces get mapped to whatever
+// occupies its geometrically mirrored bounding box -- which might be a
+// DIFFERENT cube (a limb's opposite pair, found automatically, no left_X/
+// right_X naming needed at all) or the SAME cube if it straddles the mirror
+// plane itself (the torso, the head -- exactly the case the old name-based
+// version couldn't handle, since there's no "left_torso"/"right_torso" to
+// match on). This also means it works on any model, including ones that
+// don't follow this repo's own naming convention at all.
 //
-// A box's "east"/"west" faces are the ones whose normal runs along X, so
-// mirroring the model across X swaps which physical face is "outward" --
-// east<->west swap here. "north"/"south"/"up"/"down" keep their own name
-// (their normals are along Z/Y, untouched by an X-mirror) but their pixel
-// content still needs a horizontal flip within the rect to look right on the
-// mirrored geometry -- FACE_NO_FLIP marks the two faces that must NOT flip,
-// since the east<->west swap already accounts for the mirroring there.
-const FACE_MIRROR = { north: 'north', south: 'south', up: 'up', down: 'down', east: 'west', west: 'east' };
-const FACE_NO_FLIP = new Set(['east', 'west']);
+// A box's face perpendicular to the mirror axis (e.g. east/west for an
+// X-mirror) SWAPS with its opposite -- mirroring flips which one is
+// "outward" -- and needs no internal flip, the swap already accounts for it.
+// The other four faces keep their own name but need their pixel content
+// flipped along whichever of their own U/V rect axes matches the mirror
+// axis (from face_rects()'s own layout: north/south are U=X,V=Y; up/down are
+// U=X,V=Z; east/west are U=Z,V=Y).
+const MIRROR_AXIS_INDEX = { x: 0, y: 1, z: 2 };
+const MIRROR_AXIS_CONFIG = {
+  x: { swap: ['east', 'west'], flipAxis: { north: 'u', south: 'u', up: 'u', down: 'u' } },
+  y: { swap: ['up', 'down'], flipAxis: { north: 'v', south: 'v', east: 'v', west: 'v' } },
+  z: { swap: ['north', 'south'], flipAxis: { up: 'v', down: 'v', east: 'u', west: 'u' } },
+};
 
-function mirrorPartnerName(name) {
-  if (name.startsWith('left_')) return 'right_' + name.slice(5);
-  if (name.startsWith('right_')) return 'left_' + name.slice(6);
-  if (name.endsWith('_left')) return name.slice(0, -5) + '_right';
-  if (name.endsWith('_right')) return name.slice(0, -6) + '_left';
-  return null;
+function mirroredBox(cube, axisIdx) {
+  const from = cube.from.slice(), to = cube.to.slice();
+  const a = -to[axisIdx], b = -from[axisIdx];
+  from[axisIdx] = a;
+  to[axisIdx] = b;
+  return [from, to];
+}
+function boxesMatch(fromA, toA, fromB, toB, eps) {
+  for (let i = 0; i < 3; i++) {
+    if (Math.abs(fromA[i] - fromB[i]) > eps || Math.abs(toA[i] - toB[i]) > eps) return false;
+  }
+  return true;
 }
 
-function addMirrorFacePairs(pairs, cubeA, cubeB) {
+function addAxisMirrorFacePairs(pairs, cubeA, cubeB, cfg) {
   if (!cubeA.uv_faces || !cubeB.uv_faces) return;
-  Object.keys(cubeA.uv_faces).forEach((face) => {
-    const rectB = cubeB.uv_faces[FACE_MIRROR[face]];
-    if (!rectB) return;
-    pairs.push({ rectA: cubeA.uv_faces[face], rectB, flip: !FACE_NO_FLIP.has(face) });
-  });
-}
-
-function buildMirrorMap(skeleton) {
-  const pairs = [];
-  const bones = {};
-  (function walk(nodes) { (nodes || []).forEach((n) => { bones[n.name] = n; walk(n.children); }); })(skeleton || []);
-
-  // Whole-limb pairs: same-named bones ("left_forearm"/"right_forearm"), cubes
-  // zipped by index (both sides are built by the same code path with mirrored
-  // coordinates, so they always have the same cube count in the same order).
-  const donebones = new Set();
-  Object.keys(bones).forEach((name) => {
-    const partner = mirrorPartnerName(name);
-    if (!partner || !bones[partner] || donebones.has(name) || donebones.has(partner)) return;
-    const a = bones[name], b = bones[partner];
-    if ((a.cubes || []).length && a.cubes.length === (b.cubes || []).length) {
-      for (let i = 0; i < a.cubes.length; i++) addMirrorFacePairs(pairs, a.cubes[i], b.cubes[i]);
-      donebones.add(name);
-      donebones.add(partner);
+  const [faceP, faceQ] = cfg.swap;
+  if (cubeA.uv_faces[faceP] && cubeB.uv_faces[faceQ]) {
+    pairs.push({ rectA: cubeA.uv_faces[faceP], rectB: cubeB.uv_faces[faceQ], flip: null });
+  }
+  if (cubeA !== cubeB && cubeA.uv_faces[faceQ] && cubeB.uv_faces[faceP]) {
+    pairs.push({ rectA: cubeA.uv_faces[faceQ], rectB: cubeB.uv_faces[faceP], flip: null });
+  }
+  Object.keys(cfg.flipAxis).forEach((face) => {
+    if (cubeA.uv_faces[face] && cubeB.uv_faces[face]) {
+      pairs.push({ rectA: cubeA.uv_faces[face], rectB: cubeB.uv_faces[face], flip: cfg.flipAxis[face] });
     }
   });
+}
 
-  // Cube-id pairs sharing a single bone (e.g. brow_left/brow_right both live
-  // inside the "head" bone -- there's no left_head/right_head to match on).
-  Object.values(bones).forEach((bone) => {
-    const byId = {};
-    (bone.cubes || []).forEach((c) => { if (c.id) byId[c.id] = c; });
-    Object.keys(byId).forEach((id) => {
-      const partner = mirrorPartnerName(id);
-      if (!partner || !byId[partner] || id > partner) return; // dedup: process each pair once
-      addMirrorFacePairs(pairs, byId[id], byId[partner]);
-    });
+function buildMirrorMap(cubes, axis) {
+  const axisIdx = MIRROR_AXIS_INDEX[axis] ?? 0;
+  const cfg = MIRROR_AXIS_CONFIG[axis] || MIRROR_AXIS_CONFIG.x;
+  const eps = 0.05;
+  const list = cubes || [];
+  const pairs = [];
+  const usedCross = new Set();
+
+  list.forEach((cube, i) => {
+    if (!cube.uv_faces || !cube.from || !cube.to) return;
+    const [mFrom, mTo] = mirroredBox(cube, axisIdx);
+
+    if (boxesMatch(mFrom, mTo, cube.from, cube.to, eps)) {
+      addAxisMirrorFacePairs(pairs, cube, cube, cfg); // straddles the mirror plane
+      return;
+    }
+    for (let j = 0; j < list.length; j++) {
+      if (j === i) continue;
+      const other = list[j];
+      if (!other.uv_faces || !other.from || !other.to) continue;
+      if (!boxesMatch(mFrom, mTo, other.from, other.to, eps)) continue;
+      const key = i < j ? `${i}-${j}` : `${j}-${i}`;
+      if (usedCross.has(key)) break;
+      usedCross.add(key);
+      addAxisMirrorFacePairs(pairs, cube, other, cfg);
+      break;
+    }
   });
 
   return pairs;
@@ -1078,11 +1093,12 @@ function mirrorTargetPixel(x, y) {
   }
   return null;
 }
-function mapMirrorPoint(x, y, src, dst, flip) {
+function mapMirrorPoint(x, y, src, dst, flipMode) {
   const lx = x - src[0], ly = y - src[1];
-  const dw = dst[2] - dst[0];
-  const tx = flip ? (dst[0] + (dw - 1 - lx)) : (dst[0] + lx);
-  return [tx, dst[1] + ly];
+  const dw = dst[2] - dst[0], dh = dst[3] - dst[1];
+  if (flipMode === 'u') return [dst[0] + (dw - 1 - lx), dst[1] + ly];
+  if (flipMode === 'v') return [dst[0] + lx, dst[1] + (dh - 1 - ly)];
+  return [dst[0] + lx, dst[1] + ly];
 }
 
 function applyTool(px, py) {
@@ -1236,8 +1252,9 @@ document.querySelectorAll('.tool-btn').forEach(btn => {
     setActiveTool(paint.tool === btn.dataset.tool ? null : btn.dataset.tool);
   });
 });
-function updateMirrorAvailability(skeleton) {
-  paint.mirrorMap = buildMirrorMap(skeleton);
+let currentMirrorAxis = 'x'; // TODO: expose X/Y/Z picker in the UI
+function updateMirrorAvailability(cubes) {
+  paint.mirrorMap = buildMirrorMap(cubes, currentMirrorAxis);
   const btn = document.getElementById('mirrorToggle');
   const available = paint.mirrorMap.length > 0;
   btn.classList.toggle('disabled', !available);
