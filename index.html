@@ -75,6 +75,7 @@
        height (repositionFloatingPanels skips it below max-width:640px), so it
        never competes with #sidebar for the same strip of screen. */
     #paintPanel { left: 8px; right: 8px; width: auto; top: auto !important; bottom: 8px; max-height: 55vh; }
+    #recipePanel { left: 8px; right: 8px; width: auto; top: auto !important; bottom: 8px; max-height: 55vh; }
   }
 
   /* -- Collapsible panels ------------------------------------------------ */
@@ -98,6 +99,11 @@
     padding: 10px 14px; cursor: pointer; user-select: none; font-size: 13px; font-weight: 600;
   }
   #paintToggle.panel.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  #recipeToggle.panel {
+    padding: 10px 14px; cursor: pointer; user-select: none; font-size: 13px; font-weight: 600;
+  }
+  #recipeToggle.panel.active { background: var(--accent); border-color: var(--accent); color: #fff; }
 
   #accountChip.panel {
     padding: 10px 14px; cursor: pointer; user-select: none; font-size: 13px; font-weight: 600;
@@ -135,6 +141,20 @@
   }
   #paintPanel.open { display: flex; }
   #paintPanel .hint { color: var(--muted); font-size: 11px; line-height: 1.4; }
+
+  #recipePanel {
+    position: absolute; top: 64px; right: 12px; z-index: 10;
+    width: 320px; max-height: calc(100vh - 80px); overflow-y: auto;
+    padding: 12px; display: none; flex-direction: column; gap: 10px;
+  }
+  #recipePanel.open { display: flex; }
+  #recipePanel .hint { color: var(--muted); font-size: 11px; line-height: 1.4; }
+  #recipeText {
+    width: 100%; box-sizing: border-box; height: 220px; resize: vertical;
+    background: #101014; color: #d8d8de; border: 1px solid var(--border); border-radius: 6px;
+    padding: 8px; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11px;
+  }
+
   .toolGrid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
   .toolGrid .btn { padding: 8px 4px; font-size: 17px; }
   #colorRow { display: flex; align-items: center; gap: 10px; }
@@ -176,6 +196,8 @@
        mode (texture painting), not just another preview/animation setting. Kept
        out of #sidebar and in #topBar since it's a mode toggle, not a browsing panel. -->
   <div id="paintToggle" class="panel">🎨 Editor de textura</div>
+
+  <div id="recipeToggle" class="panel">🧩 Crear mob (JSON)</div>
 
   <div id="accountChip" class="panel">👤 Iniciar sesión con Google</div>
 
@@ -293,6 +315,31 @@
   </div>
 </div>
 
+<div id="recipePanel" class="panel">
+  <div id="recipeHeader" class="panel-header">
+    <span>🧩 Crear mob desde receta</span>
+    <span class="chev">▾</span>
+  </div>
+  <div class="panel-body">
+    <span class="hint">
+      Pegá un recipe.json (formato documentado en RECIPE_SCHEMA.md del repo) y generá el mob acá
+      mismo, sin instalar nada. Usa la misma jerarquía de huesos, motor de texturas, editor de
+      pintura y guardado en biblioteca que el resto del visor.
+    </span>
+    <textarea id="recipeText" placeholder='{"name":"mi_mob","parts":[...]}'></textarea>
+    <span id="recipeError" class="hint" style="color:#ff8080; display:none;"></span>
+    <div class="row">
+      <div id="recipeExampleBtn" class="btn">Cargar ejemplo</div>
+      <div id="recipeGenerateBtn" class="btn active">Generar / Previsualizar</div>
+    </div>
+    <span class="hint">Una vez generado, usá "💾 Guardar modelo actual…" arriba para subirlo a tu biblioteca, o descargalo directo:</span>
+    <div class="row">
+      <a id="recipeDownloadBBModel" class="btn" download>⬇ .bbmodel</a>
+      <a id="recipeDownloadTexture" class="btn" download>⬇ textura</a>
+    </div>
+  </div>
+</div>
+
 <div id="viewport3d"></div>
 <div id="viewport2d">
   <canvas id="flatEditor"></canvas>
@@ -301,6 +348,7 @@
 
 <script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
 <script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="recipe_builder.js"></script>
 
 <!-- Firebase: model library (auth + Firestore). ES modules are deferred by the
      spec, so this always finishes initializing after the classic <script>
@@ -1140,6 +1188,7 @@ makeCollapsible('controlsHeader');
 makeCollapsible('paintHeader');
 makeCollapsible('treeHeader');
 makeCollapsible('libraryHeader');
+makeCollapsible('recipeHeader');
 
 // ---------------------------------------------------------------------------
 // Account + model library (Firebase). window.mmLibrary/window.mmCurrentUser
@@ -1355,13 +1404,16 @@ refreshLibrary();
   const topBarEl = document.getElementById('topBar');
   const sidebarEl = document.getElementById('sidebar');
   const paintPanelEl = document.getElementById('paintPanel');
+  const recipePanelEl = document.getElementById('recipePanel');
   function reposition() {
     const top = (topBarEl.getBoundingClientRect().bottom + gap) + 'px';
     sidebarEl.style.top = top;
     if (window.matchMedia('(max-width: 640px)').matches) {
       paintPanelEl.style.top = '';
+      recipePanelEl.style.top = '';
     } else {
       paintPanelEl.style.top = top;
+      recipePanelEl.style.top = top;
     }
   }
   new ResizeObserver(reposition).observe(topBarEl);
@@ -1404,6 +1456,82 @@ paintToggle.addEventListener('click', () => {
   setPaintView('3d'); // always start on the model, whether entering or leaving paint mode
 });
 renderer.domElement.addEventListener('contextmenu', (e) => { if (paintMode) e.preventDefault(); });
+
+// -- Recipe panel: build a mob from JSON entirely client-side ---------------
+// Reuses buildModel(data) as-is (texture painting, save-to-library, part tree, animations
+// all come for free) by handing it the exact same shape a fetched *_cubes.json has, just
+// with a data: URL for the texture instead of a server path.
+const recipeToggle = document.getElementById('recipeToggle');
+const recipePanel = document.getElementById('recipePanel');
+const recipeText = document.getElementById('recipeText');
+const recipeErrorEl = document.getElementById('recipeError');
+const recipeExampleBtn = document.getElementById('recipeExampleBtn');
+const recipeGenerateBtn = document.getElementById('recipeGenerateBtn');
+const recipeDownloadBBModel = document.getElementById('recipeDownloadBBModel');
+const recipeDownloadTexture = document.getElementById('recipeDownloadTexture');
+
+let currentRecipeRaw = null;   // parsed recipe.json (animations in "keyframes" shape, for .bbmodel export)
+let currentRecipeResult = null; // return value of rbProcessRecipe()
+
+recipeToggle.addEventListener('click', () => {
+  const open = recipePanel.classList.toggle('open');
+  recipeToggle.classList.toggle('active', open);
+  recipePanel.classList.remove('collapsed');
+});
+
+function showRecipeError(msg) {
+  recipeErrorEl.textContent = msg;
+  recipeErrorEl.style.display = msg ? 'block' : 'none';
+}
+
+recipeExampleBtn.addEventListener('click', () => {
+  fetch('recipes/golem_boss.json?v=' + Date.now())
+    .then((r) => r.json())
+    .then((j) => { recipeText.value = JSON.stringify(j, null, 2); showRecipeError(''); })
+    .catch(() => showRecipeError('No se pudo cargar el ejemplo (recipes/golem_boss.json).'));
+});
+
+recipeGenerateBtn.addEventListener('click', () => {
+  showRecipeError('');
+  let recipe;
+  try {
+    recipe = JSON.parse(recipeText.value);
+  } catch (e) {
+    showRecipeError('JSON inválido: ' + e.message);
+    return;
+  }
+  let result;
+  try {
+    result = rbProcessRecipe(recipe);
+  } catch (e) {
+    showRecipeError(e.message);
+    return;
+  }
+  currentRecipeRaw = recipe;
+  currentRecipeResult = result;
+  buildModel(result.viewerData);
+  recipeDownloadTexture.href = result.atlasCanvas.toDataURL('image/png');
+  recipeDownloadTexture.download = `${result.name}_texture.png`;
+});
+
+recipeDownloadBBModel.addEventListener('click', (e) => {
+  e.preventDefault();
+  if (!currentRecipeResult) { showRecipeError('Generá / previsualizá el modelo primero.'); return; }
+  rbBuildBBModelJSON(
+    currentRecipeResult.name, currentRecipeResult.skeleton, currentRecipeResult.atlasCanvas,
+    currentRecipeRaw.animations
+  ).then((bbjson) => {
+    const blob = new Blob([JSON.stringify(bbjson, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${currentRecipeResult.name}.bbmodel`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }).catch((err) => showRecipeError('Error generando el .bbmodel: ' + err.message));
+});
 
 // -- Pointer handling: flat atlas view ---------------------------------------
 viewport2dEl.addEventListener('pointerdown', (e) => {

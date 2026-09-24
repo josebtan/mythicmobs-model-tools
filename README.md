@@ -44,20 +44,28 @@ Esta herramienta no está atada a Claude ni a esta conversación — la interfaz
 (Claude, ChatGPT, lo que sea) puede leer ese documento y generar una receta válida sin más
 contexto que ese archivo.
 
-Flujo para alguien nuevo (persona o agente):
+Flujo para alguien nuevo (persona o agente) — **sin instalar nada**:
 
-1. Escribir un `recipe.json` siguiendo `RECIPE_SCHEMA.md` (o copiar y adaptar
-   `recipes/golem_boss.json`).
+1. Escribir un `recipe.json` siguiendo `RECIPE_SCHEMA.md` (o pedirle a un agente que lo haga).
+2. Abrir el visor, panel **"🧩 Crear mob (JSON)"**, pegar la receta, "Generar / Previsualizar".
+3. Guardarlo en la biblioteca (login con Google) para compartirlo, o descargar el `.bbmodel` y la
+   textura directo desde el panel.
+
+O, si preferís la línea de comandos:
+
+1. Escribir el `recipe.json` (mismo formato).
 2. `python3 build_bbmodel.py recipe.json` → genera `.bbmodel` + textura + `*_cubes.json`.
 3. Abrir el `.bbmodel` en Blockbench para texturizar/ajustar a mano, o revisar el resultado con
-   `render_preview.py` / el visor web.
-4. Agregar una entrada en `models.json` → el mob aparece en el visor sin tocar `index.html`.
+   `render_preview.py`.
+4. Agregar una entrada en `models.json` → el mob aparece en el selector "de fábrica" del visor
+   (distinto de la biblioteca) sin tocar `index.html`.
 5. Commit + push (o un PR, si es un repo compartido con más gente).
 
-No hace falta pedirle nada a un asistente en particular: el generador (`build_bbmodel.py`) y el
-visor (`index.html`) son genéricos — no tienen ningún nombre de hueso ni de modelo hardcodeado.
-Todo lo que hoy es específico del golem (proporciones, animaciones, colores) vive únicamente en
-`recipes/golem_boss.json` / la función `golem_boss` de `build_bbmodel.py`.
+No hace falta pedirle nada a un asistente en particular: el generador (`build_bbmodel.py` /
+`recipe_builder.js`, su equivalente en el navegador) y el visor (`index.html`) son genéricos — no
+tienen ningún nombre de hueso ni de modelo hardcodeado. Todo lo que hoy es específico del golem
+(proporciones, animaciones, colores) vive únicamente en `recipes/golem_boss.json` / la función
+`golem_boss` de `build_bbmodel.py`.
 
 ## Uso
 

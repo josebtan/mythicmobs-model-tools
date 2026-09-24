@@ -6,14 +6,26 @@ sea) puede generar uno siguiendo este documento.
 
 ## Uso
 
+**Opción A — desde el navegador, sin instalar nada:** abrí el visor
+(https://josebtan.github.io/mythicmobs-model-tools/), abrí el panel "🧩 Crear mob (JSON)", pegá tu
+receta y tocá "Generar / Previsualizar". Se ve en 3D al toque, con textura, y desde ahí podés:
+descargar el `.bbmodel` y la textura directamente, o usar "💾 Guardar modelo actual…" para subirlo
+a la biblioteca (login con Google) y compartirlo. Todo corre en el navegador — el generador de
+texturas (box-UV) está portado a JavaScript en `recipe_builder.js`.
+
+**Opción B — con Python (CLI):**
+
 ```bash
 pip install Pillow numpy --break-system-packages
 python3 build_bbmodel.py recipes/mi_mob.json
 ```
 
 Esto genera, junto al script: `mi_mob.bbmodel` (abrí esto en Blockbench), `mi_mob_texture.png`
-y `mi_mob_cubes.json` (para el visor web). Para que aparezca en el visor, agregalo a
-`models.json` (ver abajo).
+y `mi_mob_cubes.json` (para el visor web). Para que aparezca en el selector de modelos "de fábrica"
+del visor (no la biblioteca), agregalo a `models.json` (ver abajo) y hacé commit.
+
+Las dos opciones generan exactamente lo mismo — `recipe_builder.js` es un port directo de
+`build_bbmodel.py`/`texture_gen.py`, no una reimplementación distinta.
 
 ## Unidades
 
