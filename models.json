@@ -11,5 +11,11 @@
     "label": "demo_mob",
     "cubes": "demo_mob_cubes.json",
     "bbmodel": "demo_mob.bbmodel"
+  },
+  {
+    "id": "pumpkin_reaper",
+    "label": "🎃 Pumpkin Reaper",
+    "cubes": "pumpkin_reaper_cubes.json",
+    "bbmodel": "pumpkin_reaper.bbmodel"
   }
 ]
