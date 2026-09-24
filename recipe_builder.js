@@ -35,14 +35,26 @@ function rbFootprint(w, h, d) {
   return [2 * d + 2 * w, d + h];
 }
 
-function rbPackCubes(dims, atlasWidth) {
+function rbPackCubes(dims, atlasWidth, padding = 1) {
+  // Mirrors texture_gen.py's pack_cubes exactly: primary sort by tallest footprint
+  // first, secondary sort by exact (w,h,d) so left/right mirror pairs (identical
+  // dimensions) land next to each other in the atlas; `padding` keeps neighboring
+  // cube footprints from bleeding into each other under texture filtering.
+  const order = dims.map((_, i) => i).sort((a, b) => {
+    const [, fhA] = rbFootprint(...dims[a]);
+    const [, fhB] = rbFootprint(...dims[b]);
+    if (fhB !== fhA) return fhB - fhA;
+    for (let k = 0; k < 3; k++) { if (dims[a][k] !== dims[b][k]) return dims[a][k] - dims[b][k]; }
+    return 0;
+  });
   let x = 0, y = 0, rowH = 0;
-  const placements = [];
-  for (const [w, h, d] of dims) {
+  const placements = new Array(dims.length);
+  for (const i of order) {
+    const [w, h, d] = dims[i];
     let [fw, fh] = rbFootprint(w, h, d);
-    fw = Math.round(fw); fh = Math.round(fh);
+    fw = Math.round(fw) + padding; fh = Math.round(fh) + padding;
     if (x + fw > atlasWidth && x > 0) { x = 0; y += rowH; rowH = 0; }
-    placements.push([x, y]);
+    placements[i] = [x, y];
     x += fw;
     rowH = Math.max(rowH, fh);
   }
@@ -96,7 +108,7 @@ function rbCollectLeafCubes(parts) {
       const [fx, fy, fz] = cube.from, [tx, ty, tz] = cube.to;
       leaves.push({
         w: Math.abs(tx - fx), h: Math.abs(ty - fy), d: Math.abs(tz - fz),
-        color: cube.color || RB_DEFAULT_COLOR,
+        color: cube.color || RB_DEFAULT_COLOR, id: cube.id,
       });
     });
     (part.children || []).forEach(walk);
@@ -114,8 +126,13 @@ function rbBuildSkeleton(parts, uvByIndex, leaves) {
   const flatCubes = [];
   function walk(part) {
     const cubes = (part.cubes || []).map((cube) => {
-      const entry = { from: cube.from, to: cube.to, color: leaves[idx].color, uv_faces: uvByIndex[idx] };
-      flatCubes.push({ name: part.name, from: cube.from, to: cube.to, uv_faces: uvByIndex[idx] });
+      const leaf = leaves[idx];
+      const entry = { from: cube.from, to: cube.to, color: leaf.color, uv_faces: uvByIndex[idx] };
+      const flatEntry = { name: part.name, from: cube.from, to: cube.to, uv_faces: uvByIndex[idx] };
+      // Preserve "id" (e.g. "brow_left"/"brow_right") so the viewer's mirror tool can
+      // pair cubes sharing one bone -- matches build_bbmodel.py's export exactly.
+      if (leaf.id) { entry.id = leaf.id; flatEntry.id = leaf.id; }
+      flatCubes.push(flatEntry);
       idx++;
       return entry;
     });
