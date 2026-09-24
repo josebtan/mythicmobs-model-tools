@@ -17,5 +17,11 @@
     "label": "🎃 Pumpkin Reaper",
     "cubes": "pumpkin_reaper_cubes.json",
     "bbmodel": "pumpkin_reaper.bbmodel"
+  },
+  {
+    "id": "gorilla",
+    "label": "gorilla",
+    "cubes": "gorilla_cubes.json",
+    "bbmodel": "gorilla.bbmodel"
   }
 ]
