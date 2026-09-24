@@ -54,7 +54,11 @@ def pack_cubes(cube_dims, atlas_width=128, padding=1):
     neighboring footprints so each cube's six faces read as one distinct region
     instead of bleeding into its neighbor's.
     """
-    order = sorted(range(len(cube_dims)), key=lambda i: -footprint(*cube_dims[i])[1])
+    # Primary key: tallest footprint first (the packing heuristic). Secondary
+    # key: exact (w,h,d) -- a left/right mirror pair always has identical
+    # dimensions, so this clusters them next to each other in the atlas without
+    # the packer needing to know anything about bone names or symmetry itself.
+    order = sorted(range(len(cube_dims)), key=lambda i: (-footprint(*cube_dims[i])[1], cube_dims[i]))
     x = 0
     y = 0
     row_h = 0

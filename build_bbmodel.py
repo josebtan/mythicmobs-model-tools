@@ -226,7 +226,7 @@ def build_bbmodel(model_name, root_parts, out_file, animations=None):
                 "uuid": cube_uuid,
             })
             cube_uuids.append(cube_uuid)
-            flat_cubes.append({
+            flat_entry = {
                 "name": part["name"],
                 "from": cube["from"],
                 "to": cube["to"],
@@ -234,13 +234,21 @@ def build_bbmodel(model_name, root_parts, out_file, animations=None):
                 "uv_faces": uv_rects,
                 "world_center": leaf["world_center"],
                 "world_R": leaf["world_R"],
-            })
-            skeleton_cubes.append({
+            }
+            skeleton_entry = {
                 "from": cube["from"],
                 "to": cube["to"],
                 "color": leaf["color"],
                 "uv_faces": uv_rects,
-            })
+            }
+            # "id" (e.g. "brow_left"/"brow_right") previously got dropped here on
+            # export; kept now so the web viewer can mirror-pair cubes that share
+            # one bone instead of getting their own left_X/right_X bone each.
+            if "id" in cube:
+                flat_entry["id"] = cube["id"]
+                skeleton_entry["id"] = cube["id"]
+            flat_cubes.append(flat_entry)
+            skeleton_cubes.append(skeleton_entry)
 
         child_groups = []
         child_skeletons = []
@@ -435,7 +443,7 @@ golem_boss = [
                     # the jaw a bit (-3 vs -2.8), which is intentional (sloped-skull look).
                     {"from": [-3, 29, -3], "to": [3, 32.5, 2.8], "color": "#8A7A68"},     # cranium
                     {"from": [-2.8, 26, -2.8], "to": [2.8, 29, 2.8], "color": "#6E5C4C", "id": "jaw"},  # jaw block (eyes get painted on its front face)
-                    {"from": [-2.8, 26.3, 2.5], "to": [2.8, 28.8, 4.0], "color": "#5C4B3D"},  # muzzle/snout, 1px taller than before (extends up toward the brow)
+                    {"from": [-2.8, 26, 2.5], "to": [2.8, 29, 4.0], "color": "#5C4B3D"},  # muzzle/snout, exactly 3px tall, flush with the jaw's full height
                     # Brow ridge split into independent left/right halves (touching at x=0, same
                     # overall footprint as the old single cube) so each side can be driven by its
                     # own keyframes later (raise/furrow) without touching the other.

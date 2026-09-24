@@ -136,6 +136,7 @@
   #paintPanel.open { display: flex; }
   #paintPanel .hint { color: var(--muted); font-size: 11px; line-height: 1.4; }
   .toolGrid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+  #mirrorToggle.disabled { opacity: 0.4; cursor: not-allowed; }
   .toolGrid .btn { padding: 8px 4px; font-size: 17px; }
   #colorRow { display: flex; align-items: center; gap: 10px; }
   #paintColor { width: 42px; height: 32px; border: none; border-radius: 6px; background: none; padding: 0; cursor: pointer; }
@@ -618,6 +619,7 @@ function buildModel(data) {
   currentAnimations = data.animations || {};
   populateAnimPicker();
   populateTree(data.skeleton);
+  updateMirrorAvailability(data.skeleton);
 
   document.getElementById('stats').textContent =
     `${Object.keys(boneGroups).length} huesos · ${data.cubes ? data.cubes.length : '?'} cubos`;
@@ -722,7 +724,8 @@ const paint = {
   isDrawing: false,
   lastPx: null,
   gradStart: null, gradCurrent: null,
-  mirror: false,      // when on, every paint op also happens at (texW-1-x, y)
+  mirror: false,      // when on, every paint op also mirrors through mirrorMap
+  mirrorMap: null,    // rect-pair correspondence for this model's left/right parts (see buildMirrorMap)
   uvMask: null,       // Uint8Array(texW*texH): 1 where a UV face actually lives, for putImageData-based tools
   uvClipPath: null,   // same regions as a Path2D, for fillRect-based tools (brush/gradient)
   textureFilename: null, // e.g. "golem_boss_texture.png" -- the repo path the Save button commits to
@@ -926,15 +929,105 @@ function eraseSquare(px, py, size) {
   paint.ctx.putImageData(imgData, x0, y0);
 }
 
-function mirroredX(x) { return paint.texW - 1 - x; }
+// ---------------------------------------------------------------------------
+// Mirror map: real left<->right UV correspondence, built from the model's own
+// bone names and cube ids -- NOT a blind "texW-1-x" reflection of the atlas.
+// Mirroring the raw atlas coordinate only makes sense if the packer happened
+// to place the paired part at the mirrored spot, which it generally doesn't
+// (each cube gets packed wherever the shelf-packing heuristic puts it). This
+// instead finds actual left_X/right_X bone pairs (whole limbs) and left/right
+// cube-id pairs sharing one bone (like brow_left/brow_right), and maps each
+// paired UV face to the other, face-for-face.
+//
+// A box's "east"/"west" faces are the ones whose normal runs along X, so
+// mirroring the model across X swaps which physical face is "outward" --
+// east<->west swap here. "north"/"south"/"up"/"down" keep their own name
+// (their normals are along Z/Y, untouched by an X-mirror) but their pixel
+// content still needs a horizontal flip within the rect to look right on the
+// mirrored geometry -- FACE_NO_FLIP marks the two faces that must NOT flip,
+// since the east<->west swap already accounts for the mirroring there.
+const FACE_MIRROR = { north: 'north', south: 'south', up: 'up', down: 'down', east: 'west', west: 'east' };
+const FACE_NO_FLIP = new Set(['east', 'west']);
+
+function mirrorPartnerName(name) {
+  if (name.startsWith('left_')) return 'right_' + name.slice(5);
+  if (name.startsWith('right_')) return 'left_' + name.slice(6);
+  if (name.endsWith('_left')) return name.slice(0, -5) + '_right';
+  if (name.endsWith('_right')) return name.slice(0, -6) + '_left';
+  return null;
+}
+
+function addMirrorFacePairs(pairs, cubeA, cubeB) {
+  if (!cubeA.uv_faces || !cubeB.uv_faces) return;
+  Object.keys(cubeA.uv_faces).forEach((face) => {
+    const rectB = cubeB.uv_faces[FACE_MIRROR[face]];
+    if (!rectB) return;
+    pairs.push({ rectA: cubeA.uv_faces[face], rectB, flip: !FACE_NO_FLIP.has(face) });
+  });
+}
+
+function buildMirrorMap(skeleton) {
+  const pairs = [];
+  const bones = {};
+  (function walk(nodes) { (nodes || []).forEach((n) => { bones[n.name] = n; walk(n.children); }); })(skeleton || []);
+
+  // Whole-limb pairs: same-named bones ("left_forearm"/"right_forearm"), cubes
+  // zipped by index (both sides are built by the same code path with mirrored
+  // coordinates, so they always have the same cube count in the same order).
+  const donebones = new Set();
+  Object.keys(bones).forEach((name) => {
+    const partner = mirrorPartnerName(name);
+    if (!partner || !bones[partner] || donebones.has(name) || donebones.has(partner)) return;
+    const a = bones[name], b = bones[partner];
+    if ((a.cubes || []).length && a.cubes.length === (b.cubes || []).length) {
+      for (let i = 0; i < a.cubes.length; i++) addMirrorFacePairs(pairs, a.cubes[i], b.cubes[i]);
+      donebones.add(name);
+      donebones.add(partner);
+    }
+  });
+
+  // Cube-id pairs sharing a single bone (e.g. brow_left/brow_right both live
+  // inside the "head" bone -- there's no left_head/right_head to match on).
+  Object.values(bones).forEach((bone) => {
+    const byId = {};
+    (bone.cubes || []).forEach((c) => { if (c.id) byId[c.id] = c; });
+    Object.keys(byId).forEach((id) => {
+      const partner = mirrorPartnerName(id);
+      if (!partner || !byId[partner] || id > partner) return; // dedup: process each pair once
+      addMirrorFacePairs(pairs, byId[id], byId[partner]);
+    });
+  });
+
+  return pairs;
+}
+
+function mirrorTargetPixel(x, y) {
+  const map = paint.mirrorMap;
+  if (!map) return null;
+  for (const p of map) {
+    const [ax1, ay1, ax2] = p.rectA;
+    if (x >= ax1 && x < ax2 && y >= ay1 && y < p.rectA[3]) return mapMirrorPoint(x, y, p.rectA, p.rectB, p.flip);
+    const [bx1, by1, bx2] = p.rectB;
+    if (x >= bx1 && x < bx2 && y >= by1 && y < p.rectB[3]) return mapMirrorPoint(x, y, p.rectB, p.rectA, p.flip);
+  }
+  return null;
+}
+function mapMirrorPoint(x, y, src, dst, flip) {
+  const lx = x - src[0], ly = y - src[1];
+  const dw = dst[2] - dst[0];
+  const tx = flip ? (dst[0] + (dw - 1 - lx)) : (dst[0] + lx);
+  return [tx, dst[1] + ly];
+}
 
 function applyTool(px, py) {
   if (paint.tool === 'brush') paintSquare(px, py, paint.size, paint.color);
   else if (paint.tool === 'eraser') eraseSquare(px, py, paint.size);
   if (paint.mirror) {
-    const mx = mirroredX(px);
-    if (paint.tool === 'brush') paintSquare(mx, py, paint.size, paint.color);
-    else if (paint.tool === 'eraser') eraseSquare(mx, py, paint.size);
+    const t = mirrorTargetPixel(px, py);
+    if (t) {
+      if (paint.tool === 'brush') paintSquare(t[0], t[1], paint.size, paint.color);
+      else if (paint.tool === 'eraser') eraseSquare(t[0], t[1], paint.size);
+    }
   }
   paint.texture.needsUpdate = true;
 }
@@ -999,7 +1092,10 @@ function handlePointerDown(px, py) {
   if (paint.tool === 'bucket') {
     pushUndo();
     floodFill(px, py, paint.color);
-    if (paint.mirror) floodFill(mirroredX(px), py, paint.color);
+    if (paint.mirror) {
+      const t = mirrorTargetPixel(px, py);
+      if (t) floodFill(t[0], t[1], paint.color);
+    }
     paint.texture.needsUpdate = true;
     return false;
   }
@@ -1051,7 +1147,10 @@ function applyGradient(start, end) {
   if (Math.hypot(x1 - x0, y1 - y0) < 2) return; // a tap, not a drag -- no-op
   pushUndo();
   drawGradientSegment(x0, y0, x1, y1);
-  if (paint.mirror) drawGradientSegment(mirroredX(x0), y0, mirroredX(x1), y1);
+  if (paint.mirror) {
+    const t0 = mirrorTargetPixel(x0, y0), t1 = mirrorTargetPixel(x1, y1);
+    if (t0 && t1) drawGradientSegment(t0[0], t0[1], t1[0], t1[1]);
+  }
   paint.texture.needsUpdate = true;
 }
 
@@ -1071,7 +1170,22 @@ document.querySelectorAll('.tool-btn').forEach(btn => {
     setActiveTool(paint.tool === btn.dataset.tool ? null : btn.dataset.tool);
   });
 });
+function updateMirrorAvailability(skeleton) {
+  paint.mirrorMap = buildMirrorMap(skeleton);
+  const btn = document.getElementById('mirrorToggle');
+  const available = paint.mirrorMap.length > 0;
+  btn.classList.toggle('disabled', !available);
+  btn.title = available
+    ? `Espeja cada trazo a su parte simétrica (${paint.mirrorMap.length} pares de caras detectados)`
+    : 'Este modelo no tiene partes izquierda/derecha detectables para espejar';
+  if (!available && paint.mirror) {
+    paint.mirror = false;
+    btn.classList.remove('active');
+  }
+}
+
 document.getElementById('mirrorToggle').addEventListener('click', (e) => {
+  if (e.currentTarget.classList.contains('disabled')) return;
   paint.mirror = !paint.mirror;
   e.currentTarget.classList.toggle('active', paint.mirror);
 });
