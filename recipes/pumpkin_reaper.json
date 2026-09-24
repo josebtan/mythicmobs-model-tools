@@ -1,0 +1,165 @@
+{
+  "name": "pumpkin_reaper",
+  "parts": [
+    {
+      "name": "body",
+      "origin": [0, 10, 0],
+      "rotation": [0, 0, 0],
+      "cubes": [
+        {"from": [-5, 8, -3], "to": [5, 21, 3], "color": "#25222A"},
+        {"from": [-6, 12, 2.8], "to": [6, 19, 4.5], "color": "#3A2630"},
+        {"from": [-7, 18, -3], "to": [7, 21, 3], "color": "#17151B"}
+      ],
+      "children": [
+        {
+          "name": "head",
+          "origin": [0, 25, 0],
+          "cubes": [
+            {"from": [-5, 21, -5], "to": [5, 30, 5], "color": "#E86F24", "id": "pumpkin"},
+            {"from": [-6, 23, -4], "to": [-5, 29, 4], "color": "#B94F18"},
+            {"from": [5, 23, -4], "to": [6, 29, 4], "color": "#B94F18"},
+            {"from": [-3.5, 24.5, 4.7], "to": [-1, 27, 5.6], "color": "#17151B", "id": "eye_left"},
+            {"from": [1, 24.5, 4.7], "to": [3.5, 27, 5.6], "color": "#17151B", "id": "eye_right"},
+            {"from": [-2.5, 22, 4.7], "to": [2.5, 23.3, 5.5], "color": "#17151B", "id": "mouth"},
+            {"from": [-1.2, 30, -1.2], "to": [1.2, 32, 1.2], "color": "#4A321C", "id": "stem"}
+          ],
+          "children": []
+        },
+        {
+          "name": "left_arm",
+          "origin": [7, 19, 0],
+          "cubes": [{"from": [6, 12, -2.5], "to": [9, 20, 2.5], "color": "#2D2932"}],
+          "children": [
+            {
+              "name": "left_hand",
+              "origin": [7.5, 11.5, 0],
+              "cubes": [{"from": [5.5, 8, -3], "to": [10, 12, 3], "color": "#5A3A2A"}],
+              "children": []
+            }
+          ]
+        },
+        {
+          "name": "right_arm",
+          "origin": [-7, 19, 0],
+          "cubes": [{"from": [-9, 12, -2.5], "to": [-6, 20, 2.5], "color": "#2D2932"}],
+          "children": [
+            {
+              "name": "right_hand",
+              "origin": [-7.5, 11.5, 0],
+              "cubes": [{"from": [-10, 8, -3], "to": [-5.5, 12, 3], "color": "#5A3A2A"}],
+              "children": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "left_leg",
+      "origin": [2.5, 9, 0],
+      "cubes": [
+        {"from": [0, 0, -3], "to": [5, 9, 3], "color": "#17151B"},
+        {"from": [-0.5, 0, 2.5], "to": [5.5, 3, 5], "color": "#33212A"}
+      ],
+      "children": []
+    },
+    {
+      "name": "right_leg",
+      "origin": [-2.5, 9, 0],
+      "cubes": [
+        {"from": [-5, 0, -3], "to": [0, 9, 3], "color": "#17151B"},
+        {"from": [-5.5, 0, 2.5], "to": [0.5, 3, 5], "color": "#33212A"}
+      ],
+      "children": []
+    },
+    {
+      "name": "scythe",
+      "origin": [-7.5, 11.5, 0],
+      "cubes": [
+        {"from": [-8.5, 1, -1], "to": [-6.5, 30, 1], "color": "#4A321C"},
+        {"from": [-8, 27, -1.5], "to": [-4.5, 29, 1.5], "color": "#5C5C66"},
+        {"from": [-5.5, 25, -1.5], "to": [-2.5, 27, 1.5], "color": "#777780"},
+        {"from": [-4, 22, -1.5], "to": [-1, 25, 1.5], "color": "#8D8D98"}
+      ],
+      "children": []
+    }
+  ],
+  "animations": {
+    "idle": {
+      "loop": true,
+      "length": 2.0,
+      "keyframes": {
+        "body": [
+          {"time": 0.0, "position": [0, 0, 0]},
+          {"time": 1.0, "position": [0, 0.35, 0]},
+          {"time": 2.0, "position": [0, 0, 0]}
+        ],
+        "head": [
+          {"time": 0.0, "rotation": [0, 0, 0]},
+          {"time": 1.0, "rotation": [0, 3, 0]},
+          {"time": 2.0, "rotation": [0, 0, 0]}
+        ]
+      }
+    },
+    "walk": {
+      "loop": true,
+      "length": 0.8,
+      "keyframes": {
+        "body": [
+          {"time": 0.0, "position": [0, 0, 0]},
+          {"time": 0.2, "position": [0, 0.5, 0]},
+          {"time": 0.4, "position": [0, 0, 0]},
+          {"time": 0.6, "position": [0, 0.5, 0]},
+          {"time": 0.8, "position": [0, 0, 0]}
+        ],
+        "left_leg": [
+          {"time": 0.0, "rotation": [22, 0, 0]},
+          {"time": 0.4, "rotation": [-22, 0, 0]},
+          {"time": 0.8, "rotation": [22, 0, 0]}
+        ],
+        "right_leg": [
+          {"time": 0.0, "rotation": [-22, 0, 0]},
+          {"time": 0.4, "rotation": [22, 0, 0]},
+          {"time": 0.8, "rotation": [-22, 0, 0]}
+        ],
+        "left_arm": [
+          {"time": 0.0, "rotation": [-12, 0, 0]},
+          {"time": 0.4, "rotation": [12, 0, 0]},
+          {"time": 0.8, "rotation": [-12, 0, 0]}
+        ],
+        "right_arm": [
+          {"time": 0.0, "rotation": [12, 0, 0]},
+          {"time": 0.4, "rotation": [-12, 0, 0]},
+          {"time": 0.8, "rotation": [12, 0, 0]}
+        ]
+      }
+    },
+    "attack": {
+      "loop": false,
+      "length": 1.0,
+      "keyframes": {
+        "scythe": [
+          {"time": 0.0, "rotation": [0, 0, -35]},
+          {"time": 0.35, "rotation": [0, 0, 35]},
+          {"time": 0.65, "rotation": [0, 0, -75]},
+          {"time": 1.0, "rotation": [0, 0, 0]}
+        ],
+        "body": [
+          {"time": 0.0, "rotation": [0, 0, 0]},
+          {"time": 0.35, "rotation": [0, 0, -10]},
+          {"time": 0.65, "rotation": [0, 0, 12]},
+          {"time": 1.0, "rotation": [0, 0, 0]}
+        ]
+      }
+    },
+    "death": {
+      "loop": false,
+      "length": 1.2,
+      "keyframes": {
+        "body": [
+          {"time": 0.0, "rotation": [0, 0, 0]},
+          {"time": 1.2, "rotation": [70, 0, 20], "position": [0, -2, 2]}
+        ]
+      }
+    }
+  }
+}
