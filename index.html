@@ -251,6 +251,9 @@
       <div id="libraryList"><span class="hint">Conectando…</span></div>
       <div id="saveToLibraryBtn" class="btn active">💾 Guardar modelo actual…</div>
       <div id="migrateBuiltinsBtn" class="btn">🌱 Importar modelos de ejemplo</div>
+      <div id="exportJsonBtn" class="btn">⬇ Descargar JSON del modelo actual</div>
+      <label id="importTexBtn" class="btn" for="importTexInput">📥 Importar textura PNG</label>
+      <input type="file" id="importTexInput" accept="image/png,image/*" style="display:none">
     </div>
   </div>
 
@@ -817,47 +820,62 @@ function updateUndoRedoButtons() {
   document.getElementById('redoBtn').style.opacity = paint.redoStack.length ? '1' : '0.4';
 }
 
+// Shared by setupPaintCanvas (loading a model's own texture) and the "Importar
+// textura PNG" file input (dropping a locally-made texture onto whatever
+// model is currently loaded, e.g. one that came in with no texture at all).
+// Every mesh stashes a reference to its bone's shared material in userData
+// (see buildBone), so this works without buildModel needing to expose one.
+function getCurrentSharedMat() {
+  let found = null;
+  if (currentGroup) {
+    currentGroup.traverse((o) => { if (!found && o.isMesh && o.userData.sharedTexturedMat) found = o.userData.sharedTexturedMat; });
+  }
+  return found;
+}
+
+function installTextureImage(img, texW, texH, mat, cubes) {
+  const w = img.naturalWidth || texW;
+  const h = img.naturalHeight || texH;
+  const canvas = document.getElementById('flatEditor');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.clearRect(0, 0, w, h);
+  ctx.drawImage(img, 0, 0, w, h);
+
+  paint.canvas = canvas;
+  paint.ctx = ctx;
+  paint.texW = w;
+  paint.texH = h;
+  paint.original = ctx.getImageData(0, 0, w, h);
+  paint.undoStack = [];
+  paint.redoStack = [];
+  paint.lastPx = null;
+  paint.gradStart = null;
+  paint.gradCurrent = null;
+  const geo = buildUvGeometry(cubes, w, h);
+  paint.uvMask = geo.mask;
+  paint.uvClipPath = geo.clipPath;
+  updateUndoRedoButtons();
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.magFilter = THREE.NearestFilter;
+  tex.minFilter = THREE.NearestFilter;
+  tex.generateMipmaps = false;
+  paint.texture = tex;
+  mat.map = tex;
+  mat.needsUpdate = true;
+
+  sizeFlatEditor();
+}
+
 function setupPaintCanvas(url, texW, texH, mat, cubes) {
   paint.textureFilename = url; // repo-relative path, e.g. "golem_boss_texture.png" -- Save commits here
 
   const img = new Image();
   img.crossOrigin = 'anonymous';
-  img.onload = () => {
-    const w = img.naturalWidth || texW;
-    const h = img.naturalHeight || texH;
-    const canvas = document.getElementById('flatEditor');
-    canvas.width = w;
-    canvas.height = h;
-    const ctx = canvas.getContext('2d');
-    ctx.imageSmoothingEnabled = false;
-    ctx.clearRect(0, 0, w, h);
-    ctx.drawImage(img, 0, 0, w, h);
-
-    paint.canvas = canvas;
-    paint.ctx = ctx;
-    paint.texW = w;
-    paint.texH = h;
-    paint.original = ctx.getImageData(0, 0, w, h);
-    paint.undoStack = [];
-    paint.redoStack = [];
-    paint.lastPx = null;
-    paint.gradStart = null;
-    paint.gradCurrent = null;
-    const geo = buildUvGeometry(cubes, w, h);
-    paint.uvMask = geo.mask;
-    paint.uvClipPath = geo.clipPath;
-    updateUndoRedoButtons();
-
-    const tex = new THREE.CanvasTexture(canvas);
-    tex.magFilter = THREE.NearestFilter;
-    tex.minFilter = THREE.NearestFilter;
-    tex.generateMipmaps = false;
-    paint.texture = tex;
-    mat.map = tex;
-    mat.needsUpdate = true;
-
-    sizeFlatEditor();
-  };
+  img.onload = () => installTextureImage(img, texW, texH, mat, cubes);
   img.onerror = () => setErr(`No se pudo cargar la textura para el editor.`);
   // A library model's texture is an inline base64 data: URL (no file to cache-bust);
   // a repo-file model's texture is a real path, where the cache-bust matters.
@@ -1502,6 +1520,36 @@ document.getElementById('migrateBuiltinsBtn').addEventListener('click', async ()
   btn.textContent = '✓ Importados';
   refreshLibrary();
   setTimeout(() => { btn.textContent = prevText; }, 2000);
+});
+
+document.getElementById('exportJsonBtn').addEventListener('click', () => {
+  if (!currentModelData) { setErr('No hay ningún modelo cargado para exportar.'); return; }
+  // Exports the geometry/UV data as loaded (skeleton/cubes/animations), not
+  // the live canvas edit -- this is for inspecting a model's structure (e.g.
+  // one that came from outside this tool), not a texture backup.
+  const name = (currentModelData.name || picker.options[picker.selectedIndex]?.text || 'model').replace(/[^a-z0-9_-]+/gi, '_');
+  const blob = new Blob([JSON.stringify(currentModelData, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${name}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+
+document.getElementById('importTexInput').addEventListener('change', (e) => {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = ''; // allow picking the same file again later
+  if (!file) return;
+  if (!currentModelData) { setErr('Cargá un modelo antes de importarle una textura.'); return; }
+  const mat = getCurrentSharedMat();
+  if (!mat) { setErr('No se encontró el material del modelo actual.'); return; }
+  const img = new Image();
+  img.onload = () => {
+    installTextureImage(img, img.naturalWidth, img.naturalHeight, mat, currentModelData.cubes);
+    URL.revokeObjectURL(img.src);
+  };
+  img.onerror = () => setErr('No se pudo leer esa imagen.');
+  img.src = URL.createObjectURL(file);
 });
 
 window.addEventListener('mm-firebase-ready', refreshLibrary);

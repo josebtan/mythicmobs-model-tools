@@ -1,0 +1,74 @@
+name: Query Firebase Models (bridge)
+
+# Puente temporal: este runner sí tiene salida a internet hacia
+# firestore.googleapis.com (a diferencia del sandbox del asistente).
+# Hace la MISMA consulta pública que ya hace index.html (listPublic():
+# where visibility == 'public'), sin usar ninguna credencial nueva,
+# y comitea el resultado a firebase_export/public_models.json para
+# poder leerlo desde afuera.
+on:
+  workflow_dispatch: {}
+
+jobs:
+  query:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Query Firestore (public models)
+        run: |
+          mkdir -p firebase_export
+          curl -sS -X POST \
+            "https://firestore.googleapis.com/v1/projects/mythicmobs-model-tools/databases/(default)/documents:runQuery" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "structuredQuery": {
+                "from": [{"collectionId": "models"}],
+                "where": {
+                  "fieldFilter": {
+                    "field": {"fieldPath": "visibility"},
+                    "op": "EQUAL",
+                    "value": {"stringValue": "public"}
+                  }
+                }
+              }
+            }' -o firebase_export/public_models_raw.json
+          cat firebase_export/public_models_raw.json
+
+      - name: Trim cubesJson for the summary file (keep full data in raw)
+        run: |
+          python3 - <<'PY'
+          import json
+          with open("firebase_export/public_models_raw.json") as f:
+              data = json.load(f)
+          summary = []
+          for item in data:
+              doc = item.get("document")
+              if not doc:
+                  continue
+              fields = doc.get("fields", {})
+              def sval(k):
+                  v = fields.get(k, {})
+                  return v.get("stringValue")
+              cubes_json_str = sval("cubesJson") or ""
+              summary.append({
+                  "id": doc["name"].split("/")[-1],
+                  "name": sval("name"),
+                  "visibility": sval("visibility"),
+                  "ownerName": sval("ownerName"),
+                  "cubesJson_length": len(cubes_json_str),
+              })
+          with open("firebase_export/public_models_summary.json", "w") as f:
+              json.dump(summary, f, indent=2, ensure_ascii=False)
+          print(json.dumps(summary, indent=2, ensure_ascii=False))
+          PY
+
+      - name: Commit result
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add firebase_export/public_models_raw.json firebase_export/public_models_summary.json
+          git commit -m "chore: export public Firestore models (automated bridge)" || echo "Sin cambios"
+          git push

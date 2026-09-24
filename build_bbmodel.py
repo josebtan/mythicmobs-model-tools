@@ -398,13 +398,19 @@ def arm_chain(side):
                 "children": [{
                     "name": f"{tag}_hand",
                     "origin": [s * 10, 3, 0],
+                    # A 90-degree yaw so the thumb -- defined below on the hand's medial
+                    # (inward, toward the body) side -- ends up pointing toward the front
+                    # of the model instead of toward the body, without needing to redefine
+                    # the cubes in a different local frame. s*90 keeps left/right mirrored.
+                    "rotation": [0, s * 90, 0],
                     "cubes": [
-                        # Closed fist: a blocky cube (roughly as tall as it is wide/deep) instead of
-                        # the old flat open palm, with a knuckle ridge across the curled-over top and
-                        # a thumb wrapped tightly across the front instead of sticking out to the side.
-                        {"from": [s * 6, 1.5, -5], "to": [s * 13, 8, 5]},                            # fist
-                        {"from": [s * 6.3, 6.8, -5.3], "to": [s * 12.7, 8, 5.3], "color": "#3E3228"},  # curled-knuckle ridge on top
-                        {"from": [s * 4.3, 2, -1.5], "to": [s * 6.3, 6.4, 2.5], "color": "#4A3C30"},  # thumb, wrapped over the front
+                        # Closed fist, sized close to the forearm's own cross-section (was
+                        # noticeably bigger than the forearm before -- this brings it back
+                        # in proportion) with a knuckle ridge on the curled-over top and a
+                        # thumb wrapped over the medial side (see the hand's rotation above).
+                        {"from": [s * 6.5, 2, -3.5], "to": [s * 12.5, 7.5, 3.5]},                             # fist
+                        {"from": [s * 6.8, 6.7, -3.7], "to": [s * 12.2, 7.5, 3.7], "color": "#3E3228"},       # curled-knuckle ridge on top
+                        {"from": [s * 4.8, 2.5, -1.5], "to": [s * 6.5, 6, 1.5], "color": "#4A3C30"},          # thumb
                     ],
                     "children": [],
                 }],
