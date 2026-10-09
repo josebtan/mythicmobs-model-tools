@@ -530,10 +530,16 @@ function applyBoxUV(geometry, uvFaces, texW, texH) {
   for (let f = 0; f < 6; f++) {
     const rect = uvFaces[FACE_ORDER[f]];
     if (!rect) continue;
+    const base = f * 4;
+    if (rect.length === 8) {
+      // Rotated/oddly-oriented face (e.g. imported from a glTF): 4 explicit corner UVs in atlas pixels,
+      // one per BoxGeometry vertex slot, applied one-to-one -- no rect/flip assumptions.
+      for (let k = 0; k < 4; k++) uvAttr.setXY(base + k, rect[2 * k] / texW, 1 - rect[2 * k + 1] / texH);
+      continue;
+    }
     const [x1, y1, x2, y2] = rect;
     const u1 = x1 / texW, u2 = x2 / texW;
     const v1 = 1 - y2 / texH, v2 = 1 - y1 / texH; // flip V: image Y grows down, UV V grows up
-    const base = f * 4;
     uvAttr.setXY(base + 0, u1, v1);
     uvAttr.setXY(base + 1, u2, v1);
     uvAttr.setXY(base + 2, u1, v2);
@@ -545,6 +551,9 @@ function applyBoxUV(geometry, uvFaces, texW, texH) {
 function buildBone(node, sharedTexturedMat, texW, texH) {
   const group = new THREE.Group();
   const rot = node.rotation || [0, 0, 0];
+  // Blockbench composes group rotations as Z * Y * X (Euler order 'ZYX'); three.js' default 'XYZ' only
+  // agrees for single-axis rotations, so multi-axis bones (e.g. imported models) would sit wrong.
+  group.rotation.order = 'ZYX';
   group.rotation.set(
     THREE.MathUtils.degToRad(rot[0]),
     THREE.MathUtils.degToRad(rot[1]),
@@ -651,7 +660,7 @@ function buildModel(data) {
   const [texW, texH] = data.texture_size || [1, 1];
   let sharedTexturedMat = new THREE.MeshLambertMaterial({ color: 0x8a7a68 });
   if (data.texture) {
-    sharedTexturedMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+    sharedTexturedMat = new THREE.MeshLambertMaterial({ color: 0xffffff, alphaTest: 0.05, side: THREE.DoubleSide });
     setupPaintCanvas(data.texture, texW, texH, sharedTexturedMat, data.cubes);
   } else {
     clearPaintCanvas();
@@ -785,12 +794,23 @@ const paint = {
 // Union of every cube's UV face rectangles, as both a Path2D (cheap clip for
 // fillRect-based drawing) and a pixel mask (needed for putImageData-based
 // drawing, since canvas clip paths don't affect putImageData at all).
+// A face's UV entry is [x1,y1,x2,y2] (may be written flipped, x1>x2 / y1>y2) or, for rotated faces,
+// 8 numbers (4 corner points). Either way, this is its plain bounding box in atlas pixels.
+function uvRectBounds(rect) {
+  if (rect.length === 8) {
+    const xs = [rect[0], rect[2], rect[4], rect[6]], ys = [rect[1], rect[3], rect[5], rect[7]];
+    return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+  }
+  return [Math.min(rect[0], rect[2]), Math.min(rect[1], rect[3]), Math.max(rect[0], rect[2]), Math.max(rect[1], rect[3])];
+}
+
 function buildUvGeometry(cubes, w, h) {
   const mask = new Uint8Array(w * h);
   const clipPath = new Path2D();
   (cubes || []).forEach((c) => {
     if (!c.uv_faces) return;
-    Object.values(c.uv_faces).forEach(([x1, y1, x2, y2]) => {
+    Object.values(c.uv_faces).forEach((rect) => {
+      const [x1, y1, x2, y2] = uvRectBounds(rect);
       const rx1 = Math.max(0, Math.floor(x1)), ry1 = Math.max(0, Math.floor(y1));
       const rx2 = Math.min(w, Math.ceil(x2)), ry2 = Math.min(h, Math.ceil(y2));
       if (rx2 <= rx1 || ry2 <= ry1) return;
@@ -1034,18 +1054,28 @@ function boxesMatch(fromA, toA, fromB, toB, eps) {
   return true;
 }
 
+// Only plain, normalised [x1,y1,x2,y2] rects (x1<x2, y1<y2) with matching sizes can be mirrored
+// pixel-for-pixel; flipped / rotated (8-number) faces from imported models are skipped, not guessed at.
+function pushMirrorPair(pairs, rectA, rectB, flip) {
+  const ok = (r) => r.length === 4 && r[0] < r[2] && r[1] < r[3];
+  if (!ok(rectA) || !ok(rectB)) return;
+  if (Math.abs((rectA[2] - rectA[0]) - (rectB[2] - rectB[0])) > 0.5) return;
+  if (Math.abs((rectA[3] - rectA[1]) - (rectB[3] - rectB[1])) > 0.5) return;
+  pairs.push({ rectA, rectB, flip });
+}
+
 function addAxisMirrorFacePairs(pairs, cubeA, cubeB, cfg) {
   if (!cubeA.uv_faces || !cubeB.uv_faces) return;
   const [faceP, faceQ] = cfg.swap;
   if (cubeA.uv_faces[faceP] && cubeB.uv_faces[faceQ]) {
-    pairs.push({ rectA: cubeA.uv_faces[faceP], rectB: cubeB.uv_faces[faceQ], flip: null });
+    pushMirrorPair(pairs, cubeA.uv_faces[faceP], cubeB.uv_faces[faceQ], null);
   }
   if (cubeA !== cubeB && cubeA.uv_faces[faceQ] && cubeB.uv_faces[faceP]) {
-    pairs.push({ rectA: cubeA.uv_faces[faceQ], rectB: cubeB.uv_faces[faceP], flip: null });
+    pushMirrorPair(pairs, cubeA.uv_faces[faceQ], cubeB.uv_faces[faceP], null);
   }
   Object.keys(cfg.flipAxis).forEach((face) => {
     if (cubeA.uv_faces[face] && cubeB.uv_faces[face]) {
-      pairs.push({ rectA: cubeA.uv_faces[face], rectB: cubeB.uv_faces[face], flip: cfg.flipAxis[face] });
+      pushMirrorPair(pairs, cubeA.uv_faces[face], cubeB.uv_faces[face], cfg.flipAxis[face]);
     }
   });
 }
@@ -1794,23 +1824,24 @@ function lerp3(a, b, f) {
 
 function sampleTrack(track, t) {
   if (!track.length) return {};
-  const pluck = (kf) => ({
-    rot: kf.rotation ? { x: kf.rotation[0], y: kf.rotation[1], z: kf.rotation[2] } : null,
-    pos: kf.position ? { x: kf.position[0], y: kf.position[1], z: kf.position[2] } : null,
-  });
-  if (t <= track[0].time) return pluck(track[0]);
-  if (t >= track[track.length - 1].time) return pluck(track[track.length - 1]);
-  for (let i = 0; i < track.length - 1; i++) {
-    const a = track[i], b = track[i + 1];
-    if (t >= a.time && t <= b.time) {
-      const f = (b.time - a.time) > 0 ? (t - a.time) / (b.time - a.time) : 0;
-      return {
-        rot: (a.rotation && b.rotation) ? lerp3(a.rotation, b.rotation, f) : null,
-        pos: (a.position && b.position) ? lerp3(a.position, b.position, f) : null,
-      };
+  // Each channel (rotation / position / scale) is interpolated over just the keyframes that carry it,
+  // so channels can be keyed at different times (as Blockbench and the glTF/bbmodel converter do).
+  const channel = (key) => {
+    const kfs = track.filter((k) => k[key]);
+    if (!kfs.length) return null;
+    const first = kfs[0], last = kfs[kfs.length - 1];
+    if (t <= first.time) return { x: first[key][0], y: first[key][1], z: first[key][2] };
+    if (t >= last.time) return { x: last[key][0], y: last[key][1], z: last[key][2] };
+    for (let i = 0; i < kfs.length - 1; i++) {
+      const a = kfs[i], b = kfs[i + 1];
+      if (t >= a.time && t <= b.time) {
+        const f = (b.time - a.time) > 0 ? (t - a.time) / (b.time - a.time) : 0;
+        return lerp3(a[key], b[key], f);
+      }
     }
-  }
-  return {};
+    return null;
+  };
+  return { rot: channel('rotation'), pos: channel('position'), scl: channel('scale') };
 }
 
 function resetPose() {
@@ -1818,6 +1849,7 @@ function resetPose() {
     const br = g.userData.baseRotation, bp = g.userData.basePosition;
     if (br) g.rotation.set(THREE.MathUtils.degToRad(br.x), THREE.MathUtils.degToRad(br.y), THREE.MathUtils.degToRad(br.z));
     if (bp) g.position.copy(bp);
+    g.scale.set(1, 1, 1);
   });
 }
 
@@ -1828,7 +1860,7 @@ function applyAnimationFrame(name, t) {
   Object.entries(anim.tracks).forEach(([boneName, track]) => {
     const g = boneGroups[boneName];
     if (!g) return;
-    const { rot, pos } = sampleTrack(track, localT);
+    const { rot, pos, scl } = sampleTrack(track, localT);
     const br = g.userData.baseRotation, bp = g.userData.basePosition;
     if (rot && br) {
       g.rotation.set(
@@ -1838,6 +1870,7 @@ function applyAnimationFrame(name, t) {
       );
     }
     if (pos && bp) g.position.set(bp.x + pos.x, bp.y + pos.y, bp.z + pos.z);
+    if (scl) g.scale.set(scl.x, scl.y, scl.z);
   });
 }
 

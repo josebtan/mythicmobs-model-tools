@@ -168,3 +168,22 @@ poder iterar sobre las proporciones y la ubicación de las piezas sin trabajar c
 - Revisar orientación exacta del UV por cara en el visor (`applyBoxUV` en `index.html`) — puede haber
   alguna cara reflejada/rotada respecto al eje esperado; se corrige a ojo comparando contra Blockbench.
 - Exportar directamente la config `.yml` de MythicMobs + ModelEngine junto al modelo.
+
+## Importar un modelo de ModelEngine / Blockbench exportado como glTF
+
+`gltf_to_model.py` convierte un `.gltf` exportado desde Blockbench (los packs "for ModelEngine" de Sketchfab y similares) al formato de este repo:
+
+```bash
+python3 gltf_to_model.py ruta/model.gltf succubus
+# -> succubus_cubes.json  (visor: esqueleto + UVs por cara + animaciones)
+#    succubus_texture.png (todas las texturas del glTF fusionadas en un solo atlas)
+#    succubus.bbmodel     (proyecto de Blockbench "free", con cubos rotados y animaciones)
+```
+
+- Cada nodo sin malla es un hueso; cada malla es un cubo (los rotados conservan su rotación).
+- Rotaciones en Euler `ZYX` (igual que Blockbench). Las animaciones del glTF son absolutas; se guardan como
+  deltas sobre la pose de reposo, con canales `rotation` / `position` / `scale` independientes y keyframes
+  redundantes eliminados.
+- Una cara con UV rotado 90° se guarda en el JSON del visor como 8 números (las 4 esquinas) y en el `.bbmodel`
+  como `rotation: 90`; las caras sin textura apuntan a un texel transparente.
+- Tras registrar el modelo en `models.json` aparece solo en el selector.

@@ -23,5 +23,11 @@
     "label": "gorilla",
     "cubes": "gorilla_cubes.json",
     "bbmodel": "gorilla.bbmodel"
+  },
+  {
+    "id": "succubus",
+    "label": "😈 Succubus (boss, 16 animaciones)",
+    "cubes": "succubus_cubes.json",
+    "bbmodel": "succubus.bbmodel"
   }
 ]
