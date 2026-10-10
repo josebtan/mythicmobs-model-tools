@@ -577,6 +577,9 @@ def main():
     data = {
         "texture": texture_file,
         "texture_size": [atlas_w, atlas_h],
+        # Blockbench / ModelEngine models face north (-Z); repo-generated ones face +Z. The viewer's
+        # Frente/Atrás/Izq./Der. camera presets read this.
+        "front": "-z",
         "cubes": flat,
         "skeleton": skeleton,
         "animations": animations,

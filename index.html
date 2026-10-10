@@ -157,6 +157,9 @@
 
   .toolGrid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
   #mirrorToggle.disabled { opacity: 0.4; cursor: not-allowed; }
+  .mirror-axis-btn { flex: 0 0 auto; min-width: 30px; text-align: center; }
+  #viewGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  #viewGrid .btn { padding: 7px 4px; font-size: 12px; text-align: center; }
   .toolGrid .btn { padding: 8px 4px; font-size: 17px; }
   #colorRow { display: flex; align-items: center; gap: 10px; }
   #paintColor { width: 42px; height: 32px; border: none; border-radius: 6px; background: none; padding: 0; cursor: pointer; }
@@ -234,6 +237,21 @@
       <div class="row">
         <div id="rotateToggle" class="btn">Auto-rotar</div>
       </div>
+      <div>
+        <label>Vistas</label>
+        <div id="viewGrid">
+          <div class="btn view3d-btn" data-view="front" title="Desde el frente del modelo">Frente</div>
+          <div class="btn view3d-btn" data-view="back" title="Desde atrás">Atrás</div>
+          <div class="btn view3d-btn" data-view="left" title="Su lado izquierdo">Izq.</div>
+          <div class="btn view3d-btn" data-view="right" title="Su lado derecho">Der.</div>
+          <div class="btn view3d-btn" data-view="top" title="Desde arriba">Arriba</div>
+          <div class="btn view3d-btn" data-view="bottom" title="Desde abajo">Abajo</div>
+        </div>
+      </div>
+      <div class="row">
+        <div id="axesToggle" class="btn active" title="Muestra los ejes del modelo en el origen">Ejes XYZ</div>
+      </div>
+      <span class="hint" id="axesLegend"><b style="color:#ff5555">X</b> rojo · <b style="color:#55dd55">Y</b> verde · <b style="color:#5599ff">Z</b> azul</span>
       <a id="downloadBtn" class="btn" download>Descargar .bbmodel</a>
     </div>
   </div>
@@ -292,7 +310,10 @@
       <div class="btn tool-btn" data-tool="gradient" title="Degradado: arrastrá para definir dirección y área">🌈</div>
     </div>
     <div class="row">
-      <div id="mirrorToggle" class="btn" title="Espeja cada trazo en el eje X del atlas">🪞 Espejo (X)</div>
+      <div id="mirrorToggle" class="btn" title="Espeja cada trazo a su parte simétrica">🪞 Espejo</div>
+      <div class="btn mirror-axis-btn active" data-axis="x" title="Plano de simetría X (izquierda/derecha)">X</div>
+      <div class="btn mirror-axis-btn" data-axis="y" title="Plano de simetría Y (arriba/abajo)">Y</div>
+      <div class="btn mirror-axis-btn" data-axis="z" title="Plano de simetría Z (frente/atrás)">Z</div>
     </div>
     <div id="colorRow">
       <input type="color" id="paintColor" value="#8a7a68">
@@ -1282,15 +1303,22 @@ document.querySelectorAll('.tool-btn').forEach(btn => {
     setActiveTool(paint.tool === btn.dataset.tool ? null : btn.dataset.tool);
   });
 });
-let currentMirrorAxis = 'x'; // TODO: expose X/Y/Z picker in the UI
+let currentMirrorAxis = 'x';
+document.querySelectorAll('.mirror-axis-btn').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    currentMirrorAxis = btn.dataset.axis;
+    document.querySelectorAll('.mirror-axis-btn').forEach((b) => b.classList.toggle('active', b === btn));
+    if (currentModelData) updateMirrorAvailability(currentModelData.cubes);
+  });
+});
 function updateMirrorAvailability(cubes) {
   paint.mirrorMap = buildMirrorMap(cubes, currentMirrorAxis);
   const btn = document.getElementById('mirrorToggle');
   const available = paint.mirrorMap.length > 0;
   btn.classList.toggle('disabled', !available);
   btn.title = available
-    ? `Espeja cada trazo a su parte simétrica (${paint.mirrorMap.length} pares de caras detectados)`
-    : 'Este modelo no tiene partes izquierda/derecha detectables para espejar';
+    ? `Espeja cada trazo a su parte simétrica en el eje ${currentMirrorAxis.toUpperCase()} (${paint.mirrorMap.length} pares de caras)`
+    : `Este modelo no es simétrico en el eje ${currentMirrorAxis.toUpperCase()} (o sus caras no se pueden espejar píxel a píxel)`;
   if (!available && paint.mirror) {
     paint.mirror = false;
     btn.classList.remove('active');
@@ -1873,6 +1901,44 @@ function applyAnimationFrame(name, t) {
     if (scl) g.scale.set(scl.x, scl.y, scl.z);
   });
 }
+
+// -- Axes gizmo + preset camera views ---------------------------------------------------------
+// Three.js' AxesHelper: X red, Y green, Z blue, drawn from the origin along the positive axes.
+const axesHelper = new THREE.AxesHelper(24);
+axesHelper.position.y = 0.05; // just above the grid so it doesn't z-fight with it
+scene.add(axesHelper);
+document.getElementById('axesToggle').addEventListener('click', (e) => {
+  axesHelper.visible = !axesHelper.visible;
+  e.currentTarget.classList.toggle('active', axesHelper.visible);
+});
+
+// Which way a model faces. Repo-generated models face +Z; models imported from Blockbench/ModelEngine
+// (gltf_to_model.py) face -Z and say so via "front" in their JSON.
+function modelFront() {
+  const f = (currentModelData && currentModelData.front) || '+z';
+  return new THREE.Vector3(0, 0, f === '-z' ? -1 : 1);
+}
+function setView(view) {
+  if (!currentGroup) return;
+  const box = new THREE.Box3().setFromObject(currentGroup);
+  const center = box.getCenter(new THREE.Vector3());
+  const size = box.getSize(new THREE.Vector3());
+  const dist = Math.max(size.x, size.y, size.z) * 1.9 + 10;
+  const front = modelFront(), up = new THREE.Vector3(0, 1, 0);
+  const left = new THREE.Vector3().crossVectors(up, front); // the model's own left
+  const dir = {
+    front: front.clone(), back: front.clone().negate(),
+    left: left, right: left.clone().negate(),
+    top: new THREE.Vector3(0, 1, 0.001), bottom: new THREE.Vector3(0, -1, 0.001), // tiny tilt: avoids a degenerate up-vector
+  }[view];
+  if (!dir) return;
+  camera.position.copy(center).addScaledVector(dir.normalize(), dist);
+  controls.target.copy(center);
+  controls.update();
+}
+document.querySelectorAll('.view3d-btn').forEach((btn) => {
+  btn.addEventListener('click', () => setView(btn.dataset.view));
+});
 
 const clock = new THREE.Clock();
 function animate() {
