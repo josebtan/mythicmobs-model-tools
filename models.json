@@ -14,7 +14,7 @@
   },
   {
     "id": "pumpkin_reaper",
-    "label": "🎃 Pumpkin Reaper",
+    "label": "\ud83c\udf83 Pumpkin Reaper",
     "cubes": "pumpkin_reaper_cubes.json",
     "bbmodel": "pumpkin_reaper.bbmodel"
   },
@@ -26,14 +26,20 @@
   },
   {
     "id": "succubus",
-    "label": "😈 Succubus (boss, 16 animaciones)",
+    "label": "\ud83d\ude08 Succubus (boss, 16 animaciones)",
     "cubes": "succubus_cubes.json",
     "bbmodel": "succubus.bbmodel"
   },
   {
     "id": "mutant_zombie",
-    "label": "🧟 Mutant Zombie (4 animaciones)",
+    "label": "\ud83e\udddf Mutant Zombie (4 animaciones)",
     "cubes": "mutant_zombie_cubes.json",
     "bbmodel": "mutant_zombie.bbmodel"
+  },
+  {
+    "id": "spider",
+    "label": "\ud83d\udd77\ufe0f Spider Monster (3 animaciones)",
+    "cubes": "spider_cubes.json",
+    "bbmodel": "spider.bbmodel"
   }
 ]

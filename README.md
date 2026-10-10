@@ -180,6 +180,14 @@ python3 gltf_to_model.py ruta/model.gltf succubus
 #    succubus.bbmodel     (proyecto de Blockbench "free", con cubos rotados y animaciones)
 ```
 
+Para un FBX ASCII exportado con el exportador FBX de Blockbench (p. ej. `spider.geo.fbx`), primero se traduce a glTF y luego se importa igual:
+
+```bash
+python3 fbx_to_gltf.py modelo.fbx textura.png modelo.gltf
+python3 gltf_to_model.py modelo.gltf nombre
+```
+
+
 - Cada nodo sin malla es un hueso; cada malla es un cubo (los rotados conservan su rotación).
 - Rotaciones en Euler `ZYX` (igual que Blockbench). Las animaciones del glTF son absolutas; se guardan como
   deltas sobre la pose de reposo, con canales `rotation` / `position` / `scale` independientes y keyframes
