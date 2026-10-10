@@ -41,6 +41,18 @@ PX = 16.0  # glTF unit -> Blockbench pixel
 # A Blockbench/three.js box mesh has 4 vertices per face, in this order of faces:
 FACES = ["east", "west", "up", "down", "south", "north"]  # +x, -x, +y, -y, +z, -z
 
+# Where each of a box's 4 UV "slots" sits on each face (sign of the vertex relative to the box centre).
+# Blockbench/three.js lay a face's UVs out as [TL, TR, BL, BR] in exactly this slot order.
+SLOT_SIGNS = {
+    "east": [(1, 1, 1), (1, 1, -1), (1, -1, 1), (1, -1, -1)],
+    "west": [(-1, 1, -1), (-1, 1, 1), (-1, -1, -1), (-1, -1, 1)],
+    "up": [(-1, 1, -1), (1, 1, -1), (-1, 1, 1), (1, 1, 1)],
+    "down": [(-1, -1, 1), (1, -1, 1), (-1, -1, -1), (1, -1, -1)],
+    "south": [(-1, 1, 1), (1, 1, 1), (-1, -1, 1), (1, -1, 1)],
+    "north": [(1, 1, -1), (-1, 1, -1), (1, -1, -1), (-1, -1, -1)],
+}
+FACE_NORMAL = {"east": (1, 0, 0), "west": (-1, 0, 0), "up": (0, 1, 0), "down": (0, -1, 0),
+               "south": (0, 0, 1), "north": (0, 0, -1)}
 LOOP_PREFIXES = ("idle", "walk", "run", "fly", "hoe_play")
 HOLD_NAMES = ("death",)
 LOOP_EXACT = ("jump",)
@@ -191,7 +203,10 @@ def main():
     ap.add_argument("gltf")
     ap.add_argument("name", help="output prefix, e.g. 'succubus' -> succubus_cubes.json ...")
     ap.add_argument("--out-dir", default=".")
+    ap.add_argument("--rename", action="append", default=[], metavar="OLD=NEW",
+                    help="rename an animation (repeatable), e.g. --rename general=idle")
     args = ap.parse_args()
+    renames = dict(r.split("=", 1) for r in args.rename)
 
     gl = Gltf(args.gltf)
     g = gl.g
@@ -262,24 +277,46 @@ def main():
         prim = g["meshes"][n["mesh"]]["primitives"][0]
         P = gl.acc(prim["attributes"]["POSITION"]) * PX
         U = gl.acc(prim["attributes"]["TEXCOORD_0"])
-        if len(P) != 24:
-            raise SystemExit(f"node {node_i}: mesh is not a 24-vertex box ({len(P)} vertices)")
+        N = gl.acc(prim["attributes"]["NORMAL"]) if "NORMAL" in prim["attributes"] else None
+        if "indices" in prim:  # indexed mesh: expand to one row per index
+            idx = gl.acc(prim["indices"])[:, 0].astype(int)
+            P, U = P[idx], U[idx]
+            N = N[idx] if N is not None else None
+        if N is None:
+            raise SystemExit(f"node {node_i}: mesh has no NORMAL attribute")
         pivot = parent_abs + node_T(n)
         cube = Cube()
         cube.pivot = pivot
         cube.rot = matrix_to_euler_zyx(quat_to_matrix(node_Q(n)))
         cube.frm = pivot + P.min(axis=0)
         cube.to = pivot + P.max(axis=0)
+        center = (P.min(axis=0) + P.max(axis=0)) / 2
+        size = P.max(axis=0) - P.min(axis=0)
         w_, h_, xo, yo = mat_geom(prim.get("material", 0))
         cube._raw = []
-        for f, face in enumerate(FACES):
-            q = U[4 * f: 4 * f + 4]
-            degenerate = np.ptp(q[:, 0]) < 1e-6 or np.ptp(q[:, 1]) < 1e-6
-            if degenerate:
-                cube.uv[face] = None
+        for face in FACES:
+            fn = np.array(FACE_NORMAL[face])
+            rows = np.where(N @ fn > 0.9)[0]
+            axis = int(np.argmax(np.abs(fn)))
+            in_plane = [a for a in range(3) if a != axis]
+            slots = [None] * 4
+            if len(rows) and all(size[a] > 1e-4 for a in in_plane):
+                for r in rows:
+                    sg = np.sign(np.round((P[r] - center) / max(size.max(), 1e-6) * 1000))
+                    for k, ref in enumerate(SLOT_SIGNS[face]):
+                        if all(sg[a] == ref[a] for a in in_plane):
+                            slots[k] = U[r]
+            if any(sl is None for sl in slots):
+                cube.uv[face] = None   # no vertices / zero-area face: nothing to texture
+                stats["untextured_faces"] += 1
+                continue
+            q = np.array(slots)
+            if np.ptp(q[:, 0]) < 1e-6 or np.ptp(q[:, 1]) < 1e-6:
+                cube.uv[face] = None   # all four corners share a UV coordinate: Blockbench "no texture"
                 stats["untextured_faces"] += 1
                 continue
             cube._raw.append((face, q.copy(), w_, h_, xo, yo))
+        cube.size = size
         return cube
 
     def corners_from_raw(raw, flip_v):
@@ -372,6 +409,25 @@ def main():
     for b in top_bones:
         walk_fix(b)
 
+    # Sanity check on the slot/face mapping: a face's texture rect should be about as big as the face.
+    expect_axes = {"east": (2, 1), "west": (2, 1), "up": (0, 2), "down": (0, 2), "south": (0, 1), "north": (0, 1)}
+    mismatches = 0
+    def walk_diag(b):
+        nonlocal mismatches
+        for c in b.cubes:
+            for face, fc in c.uv.items():
+                if not fc or fc["rot"]:
+                    continue
+                aw, ah = expect_axes[face]
+                r = fc["rect"]
+                if abs(abs(r[2] - r[0]) - c.size[aw]) > 0.6 or abs(abs(r[3] - r[1]) - c.size[ah]) > 0.6:
+                    mismatches += 1
+        for ch in b.children:
+            walk_diag(ch)
+    for b in top_bones:
+        walk_diag(b)
+    stats["face_rect_size_mismatch"] = mismatches
+
     # average colour per cube from its textured faces (used by the viewer's "Textura: off" mode)
     def cube_color(c):
         px = []
@@ -426,10 +482,10 @@ def main():
                     e = nearest_euler(matrix_to_euler_zyx(quat_to_matrix(qi)), prev)
                     E.append(e)
                     prev = e
-                frames["rotation"] = (t, np.array(E) - rest_E, 0.15)
+                frames["rotation"] = (t, np.array(E) - rest_E, 0.05)
             if "translation" in chans:
                 t, v = chans["translation"]
-                frames["position"] = (t, v * PX - bone.rest_T, 0.02)
+                frames["position"] = (t, v * PX - bone.rest_T, 0.01)
             if "scale" in chans:
                 t, v = chans["scale"]
                 frames["scale"] = (t, v, 0.002)
@@ -441,7 +497,17 @@ def main():
                     key = round(float(t[i]), 4)
                     kf.setdefault(key, {})[chan] = [round(float(x), 4 if chan == "scale" else 3) for x in vals[i]]
             tracks[bone.name] = [{"time": k, **kf[k]} for k in sorted(kf)]
-        name = a["name"]
+        name = a["name"].split(".")[-1] or a["name"]
+        name = renames.get(name, renames.get(a["name"], name))
+        if all(abs(v) < 1e-3 for kfs in tracks.values() for kf in kfs
+               for ch, vals in kf.items() if ch in ("rotation", "position") for v in vals) and \
+           all(abs(v - 1) < 1e-3 for kfs in tracks.values() for kf in kfs for v in kf.get("scale", [1])):
+            print(f"  (skipping animation '{name}': every keyframe is the rest pose, it does nothing)")
+            continue
+        k = 2
+        base_name = name
+        while name in animations:
+            name, k = f"{base_name}_{k}", k + 1
         if name in HOLD_NAMES:
             mode = "hold"
         elif name.startswith(LOOP_PREFIXES) or name in LOOP_EXACT:

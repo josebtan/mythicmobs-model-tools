@@ -186,4 +186,7 @@ python3 gltf_to_model.py ruta/model.gltf succubus
   redundantes eliminados.
 - Una cara con UV rotado 90° se guarda en el JSON del visor como 8 números (las 4 esquinas) y en el `.bbmodel`
   como `rotation: 90`; las caras sin textura apuntan a un texel transparente.
+- Acepta tanto el exportador nuevo de Blockbench (mallas de 24 vértices) como el viejo 3.8.x (36 vértices sin
+  índices). Los nombres estilo Bedrock (`animation.Zombie_mutant.walk`) se limpian a `walk`, y las animaciones
+  que no mueven nada se descartan. `--rename general=idle` renombra una animación (repetible).
 - Tras registrar el modelo en `models.json` aparece solo en el selector.

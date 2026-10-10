@@ -29,5 +29,11 @@
     "label": "😈 Succubus (boss, 16 animaciones)",
     "cubes": "succubus_cubes.json",
     "bbmodel": "succubus.bbmodel"
+  },
+  {
+    "id": "mutant_zombie",
+    "label": "🧟 Mutant Zombie (4 animaciones)",
+    "cubes": "mutant_zombie_cubes.json",
+    "bbmodel": "mutant_zombie.bbmodel"
   }
 ]
