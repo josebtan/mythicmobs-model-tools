@@ -198,3 +198,16 @@ python3 gltf_to_model.py modelo.gltf nombre
   índices). Los nombres estilo Bedrock (`animation.Zombie_mutant.walk`) se limpian a `walk`, y las animaciones
   que no mueven nada se descartan. `--rename general=idle` renombra una animación (repetible).
 - Tras registrar el modelo en `models.json` aparece solo en el selector.
+- **Orientación (`--front`)**: los glTF de Blockbench/ModelEngine miran hacia −Z (se conserva por defecto). Con
+  `--front +z` el conversor gira el modelo 180° en Y (posiciones, rotaciones, caras/UV y animaciones) para seguir la
+  convención del generador del repo (`+z = frente`). `succubus_front_plus_z.bbmodel` es esa variante, para comparar en el plugin.
+
+## Nombres de hueso duplicados (error `Duplicate key` en BetterModel)
+
+BetterModel/ModelEngine indexan los huesos por nombre. Al importar un `.gltf` directamente en Blockbench cada nodo pasa a
+ser un grupo y los repetidos (p. ej. decenas de `cube`) rompen la carga. Para arreglar cualquier `.bbmodel`:
+
+```bash
+python3 bbmodel_unique_names.py mi_modelo.bbmodel          # escribe mi_modelo.fixed.bbmodel
+python3 bbmodel_unique_names.py mi_modelo.bbmodel --lower  # además pasa los nombres a minúsculas
+```

@@ -205,6 +205,10 @@ def main():
     ap.add_argument("--out-dir", default=".")
     ap.add_argument("--rename", action="append", default=[], metavar="OLD=NEW",
                     help="rename an animation (repeatable), e.g. --rename general=idle")
+    ap.add_argument("--front", choices=["+z", "-z"], default="-z",
+                    help="direction the output model faces. Blockbench/ModelEngine glTFs face -Z (kept by default); "
+                         "+z turns the model 180 deg around Y (positions, rotations, faces/UVs and animation deltas), "
+                         "which is the convention of this repo's own generator ('+z = frente').")
     args = ap.parse_args()
     renames = dict(r.split("=", 1) for r in args.rename)
 
@@ -516,6 +520,10 @@ def main():
             mode = "once"
         animations[name] = {"loop": mode == "loop", "loop_mode": mode, "length": round(length, 4), "tracks": tracks}
 
+    # ---- 4b. orientation -------------------------------------------------------------------------
+    if args.front == "+z":   # glTF from Blockbench faces -Z
+        turn_model_around(top_bones, animations, face_from_corners)
+
     # ---- 5. output: viewer JSON ----------------------------------------------------------------
     prefix = args.name
     texture_file = f"{prefix}_texture.png"
@@ -579,7 +587,7 @@ def main():
         "texture_size": [atlas_w, atlas_h],
         # Blockbench / ModelEngine models face north (-Z); repo-generated ones face +Z. The viewer's
         # Frente/Atrás/Izq./Der. camera presets read this.
-        "front": "-z",
+        "front": args.front,
         "cubes": flat,
         "skeleton": skeleton,
         "animations": animations,
@@ -679,6 +687,47 @@ def main():
     for an, a in animations.items():
         kfs = sum(len(v) for v in a["tracks"].values())
         print(f"  anim {an:12s} {a['loop_mode']:5s} {a['length']:5.2f}s  {len(a['tracks']):2d} bones  {kfs:4d} keyframes")
+
+
+def turn_model_around(top_bones, animations, face_from_corners):
+    """Rotate the whole model 180 deg about Y (x,z -> -x,-z), in place.
+
+    Conjugating every local transform by that rotation gives: bone/cube positions (-x, y, -z), ZYX Euler
+    rotations (-rx, ry, -rz), and the same for animation deltas (scale is untouched). A box's faces trade
+    places (east<->west, south<->north) keeping their UVs; top/bottom stay put but are turned 180 deg in
+    their own plane, which reverses their 4 corner UVs."""
+    F = np.array([-1.0, 1.0, -1.0])
+    swap = {"east": "west", "west": "east", "south": "north", "north": "south", "up": "up", "down": "down"}
+
+    def bone(b):
+        b.origin = b.origin * F
+        b.rot = b.rot * F
+        for c in b.cubes:
+            lo, hi = c.frm * F, c.to * F
+            c.frm, c.to = np.minimum(lo, hi), np.maximum(lo, hi)
+            c.pivot = c.pivot * F
+            c.rot = c.rot * F
+            turned = {}
+            for face, fc in c.uv.items():
+                if fc and face in ("up", "down"):
+                    fc = face_from_corners(list(reversed(fc["pts"])))
+                turned[swap[face]] = fc
+            c.uv = turned
+        for ch in b.children:
+            bone(ch)
+
+    for b in top_bones:
+        bone(b)
+
+    def neg(v):
+        return [(0.0 - v[0]) + 0.0, v[1], (0.0 - v[2]) + 0.0]
+
+    for anim in animations.values():
+        for kfs in anim["tracks"].values():
+            for kf in kfs:
+                for chan in ("rotation", "position"):
+                    if chan in kf:
+                        kf[chan] = neg(kf[chan])
 
 
 def iter_bones(bones):
