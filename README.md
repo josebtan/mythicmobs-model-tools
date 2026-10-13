@@ -205,9 +205,10 @@ python3 gltf_to_model.py modelo.gltf nombre
 ## Nombres de hueso duplicados (error `Duplicate key` en BetterModel)
 
 BetterModel/ModelEngine indexan los huesos por nombre. Al importar un `.gltf` directamente en Blockbench cada nodo pasa a
-ser un grupo y los repetidos (p. ej. decenas de `cube`) rompen la carga. Para arreglar cualquier `.bbmodel`:
+ser un grupo y los repetidos (p. ej. decenas de `cube`) rompen la carga con `IllegalStateException: Duplicate key: cube and cube`.
+Para arreglar cualquier `.bbmodel`:
 
 ```bash
-python3 bbmodel_unique_names.py mi_modelo.bbmodel          # escribe mi_modelo.fixed.bbmodel
-python3 bbmodel_unique_names.py mi_modelo.bbmodel --lower  # además pasa los nombres a minúsculas
+python3 fix_bbmodel_names.py mi_modelo.bbmodel          # -> mi_modelo_fixed.bbmodel, nombres únicos
+python3 fix_bbmodel_names.py mi_modelo.bbmodel --fold   # además fusiona los grupos auxiliares (menos huesos en el juego)
 ```
